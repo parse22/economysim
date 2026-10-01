@@ -51,11 +51,12 @@ difficulty plus a ramp driven by Advancement.
 
 ## Time and space
 
-The simulation is turn based. Time and position are abstracted to discrete
-units:
+The simulation is turn based, with time on a cost model. Time and position are
+abstracted to discrete units:
 
-- **Time** is an integer count of turns. Every encounter costs a whole number
-  of turns.
+- A **turn** is one decision: take the encounter here, or rotate elsewhere.
+- **Time** is a budget, not a turn counter. Each encounter spends its own
+  integer time cost, so turns differ in how much time they consume.
 - **Position** is a set of discrete locations. Each location holds one
   encounter: a camp, an objective or a rest site.
 - An encounter can only be taken at the player's current location. Moving to
@@ -67,9 +68,14 @@ units:
 
 ## Full attrition
 
-Full attrition occurs when an encounter's attrition cost exceeds the remaining
-pool. The encounter **fails**: its time is still spent, and it grants no
-Growth or Advancement. What happens next is fundamental question 1.
+Full attrition occurs when an encounter's attrition cost would drain the pool
+to 0 (cost ≥ remaining attrition). This applies to every encounter that costs
+attrition, Rotation included. The encounter **fails**: its time is still
+spent, and it grants no Growth or Advancement (a failed Rotation does not
+move the player). What happens next is fundamental question 1.
+
+An encounter whose time cost exceeds the remaining Time ends the session
+(time failure) without resolving.
 
 ## Fundamental questions
 
@@ -83,7 +89,7 @@ Growth or Advancement. What happens next is fundamental question 1.
 | `t_delay`     | —         | Time lost. If Time reaches 0, the session fails.               |
 | `A_recover`   | —         | Attrition pool after recovering.                               |
 | `g_loss`      | 0         | Growth lost. 0 = time-only setback; > 0 = Nightreign-style.    |
-| `retry`       | retryable | Whether the failed encounter remains available or is consumed. |
+| `retry`       | retryable | Whether the failed encounter remains available or is consumed. A consumed objective ends the session, since all objectives are required. |
 | `relocate`    | false     | Whether recovering forces a Rotation before the next encounter.|
 
 Growth loss is a variant of delay rather than a separate fundamental.
@@ -137,10 +143,33 @@ Further forms can be added as tuning needs them.
 - Rest anywhere (a possible later sim option).
 - Optional or bypassable objectives.
 - Non-uniform distances between locations.
+- Variance in encounter costs.
 
-## Not yet specified
+## Player models
 
-- How player decisions are made when the simulation is run.
+Each configuration is evaluated by two kinds of simulated player, and can
+also be played by hand:
+
+- **Optimal**: exhaustive search over every sequence of decisions, with
+  perfect information. Shows the best outcome a configuration permits and the
+  route to it. Ranks outcomes by: win, then advancement, then time left, then
+  attrition left, then growth.
+- **Archetypes**: rule-based players representing play styles. Each is
+  defined by when it camps (until the next objective's cost falls below a
+  fraction of max attrition) and when it rests (below a fraction of max
+  attrition, or whenever the next encounter would leave too little to rotate
+  back to a rest site).
+  - Rusher: never camps; rests only to avoid failing.
+  - Balanced: camps until objectives cost half the pool.
+  - Cautious: camps until objectives cost a quarter of the pool; rests below
+    half.
+- **Interactive**: a human picks each action.
+
+The gap between optimal and archetype results indicates how much a
+configuration rewards skill.
+
+Encounter costs are deterministic for now. Variance is a possible later
+option.
 
 ## Notation
 
