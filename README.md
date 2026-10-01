@@ -49,7 +49,9 @@ A `--config` file only needs the keys it overrides, for example:
 ## Web version
 
 `web/index.html` is a phone-friendly page with three tabs: Play (the
-interactive game), Compare (all 12 configurations with step-by-step traces)
+interactive game), Compare (one configuration at a time: optimal play
+against the three archetypes, with a timeline of how each spent its time and
+step-by-step traces)
 and Settings (every parameter, plus JSON import and export).
 `web/economysim.js` is a JavaScript port of the model and players.
 `tests/test_web_parity.py` runs both versions on the same configurations and

@@ -19,6 +19,7 @@
   --won: #2f7d45;
   --lost: #b93a34;
   --warn-bg: #f8e3e1;
+  --c-camp: #2a78d6; --c-objective: #eb6834; --c-rest: #1baf7a; --c-rotation: #eda100;
   --font-display: "Cinzel", "Trajan Pro", Georgia, serif;
   --font-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
   --font-data: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -30,6 +31,7 @@
     --accent: #8f9cff; --accent-ink: #0e1120;
     --time: #6eb2e6; --attr: #f07d74; --growth: #76c68d; --adv: #e0b55b;
     --won: #76c68d; --lost: #f07d74; --warn-bg: #3a1d22;
+    --c-camp: #3987e5; --c-objective: #d95926; --c-rest: #199e70; --c-rotation: #c98500;
     color-scheme: dark;
   }
 }
@@ -38,6 +40,7 @@
   --accent: #8f9cff; --accent-ink: #0e1120;
   --time: #6eb2e6; --attr: #f07d74; --growth: #76c68d; --adv: #e0b55b;
   --won: #76c68d; --lost: #f07d74; --warn-bg: #3a1d22;
+  --c-camp: #3987e5; --c-objective: #d95926; --c-rest: #199e70; --c-rotation: #c98500;
   color-scheme: dark;
 }
 
@@ -79,7 +82,7 @@ main .wrap { padding-top: 16px; }
 .seg-opts { display: flex; flex-wrap: wrap; gap: 6px; }
 .seg-opts input { position: absolute; opacity: 0; pointer-events: none; }
 .seg-opts label {
-  flex: 1 1 0; min-width: 0; text-align: center; padding: 7px 8px; border-radius: 8px;
+  flex: 1 1 auto; min-width: 0; text-align: center; padding: 7px 8px; border-radius: 8px;
   border: 1px solid var(--line); background: var(--panel); cursor: pointer; font-weight: 600; font-size: 0.92rem;
 }
 .seg-opts input:checked + label { border-color: var(--accent); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
@@ -152,25 +155,45 @@ summary { cursor: pointer; font-weight: 700; }
 .objlist .done { color: var(--muted); text-decoration: line-through; }
 
 /* Compare */
-.cards { display: grid; gap: 10px; }
-.card {
-  display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--panel); text-align: left; width: 100%; cursor: pointer;
-}
-.card[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.card .head { font-weight: 700; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.summary { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+.summary th { text-align: left; font-size: 0.76rem; color: var(--muted); font-weight: 600; padding: 0 4px 6px 0; }
+.summary td { padding: 7px 4px 7px 0; border-top: 1px solid var(--line); font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.summary td:first-child { font-family: var(--font-body); font-weight: 700; }
+.summary th:not(:first-child), .summary td:not(:first-child) { text-align: right; }
+.summary tr { cursor: pointer; }
+.summary tr[aria-selected="true"] td { color: var(--accent); }
+.scroll-x { overflow-x: auto; }
 .result { font-family: var(--font-data); font-size: 0.82rem; font-weight: 700; }
 .result.won { color: var(--won); }
 .result.lost { color: var(--lost); }
-.arch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.arch div { font-size: 0.78rem; border-top: 1px solid var(--line); padding-top: 4px; min-width: 0; }
-.arch .result { display: block; overflow-wrap: anywhere; }
-.trace { scroll-margin-top: 130px; display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius); padding: 14px; }
+.panel { display: grid; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.timelines { display: grid; gap: 12px; }
+.tl { display: grid; gap: 4px; }
+.tl-head { display: flex; justify-content: space-between; gap: 8px; font-size: 0.88rem; }
+.tl-head b { font-weight: 700; }
+.track { position: relative; height: 22px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.seg-bar { position: absolute; top: 0; bottom: 0; border: 0; padding: 0; cursor: pointer; border-right: 2px solid var(--panel); }
+.seg-bar:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.seg-bar.on { box-shadow: inset 0 0 0 2px var(--ink); }
+.k-camp { background: var(--c-camp); }
+.k-objective { background: var(--c-objective); }
+.k-rest { background: var(--c-rest); }
+.k-rotation { background: var(--c-rotation); }
+.k-delay { background: repeating-linear-gradient(45deg, var(--lost) 0 3px, transparent 3px 6px); }
+.seg-bar.failed { background-image: repeating-linear-gradient(135deg, var(--panel) 0 2px, transparent 2px 6px); box-shadow: inset 0 0 0 2px var(--lost); }
+.axis { position: relative; height: 16px; font-family: var(--font-data); font-size: 0.7rem; color: var(--muted); }
+.axis span { position: absolute; transform: translateX(-50%); }
+.axis span:first-child { transform: none; }
+.axis span:last-child { transform: translateX(-100%); }
+.keys { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.82rem; color: var(--muted); }
+.keys span { display: inline-flex; align-items: center; gap: 6px; }
+.keys i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+.keys i.failed { background: repeating-linear-gradient(135deg, var(--panel) 0 2px, var(--muted) 2px 6px); box-shadow: inset 0 0 0 2px var(--lost); }
+.readout { font-size: 0.88rem; min-height: 2.6em; border-top: 1px solid var(--line); padding-top: 8px; }
 .trace ol { margin: 0; padding: 0; list-style: none; display: grid; font-size: 0.86rem; }
 .trace li { padding: 6px 0; border-top: 1px solid var(--line); display: grid; gap: 2px; }
 .trace li.fail { color: var(--lost); font-weight: 600; }
 .trace li .after { color: var(--muted); font-family: var(--font-data); font-size: 0.74rem; font-weight: 500; }
-.progress { font-family: var(--font-data); font-size: 0.85rem; color: var(--muted); }
 .legend { display: grid; gap: 2px; font-size: 0.86rem; color: var(--muted); }
 .error { color: var(--lost); font-weight: 600; font-size: 0.9rem; }
 
@@ -255,14 +278,19 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
 
   <!-- COMPARE -->
   <section id="tab-compare" class="wrap" role="tabpanel" hidden>
-    <p class="muted small">All 12 fundamental configurations with your current parameters. Optimal play is an exhaustive search with perfect information; the archetypes follow simple rules. Tap a configuration to trace a run step by step.</p>
-    <div class="row">
-      <button class="btn primary" id="run-compare">Run comparison</button>
-      <span class="progress" id="compare-progress"></span>
-    </div>
+    <p class="muted small">One configuration at a time: optimal play against the three player archetypes, using your current parameters. Set the rules to move between the 12 configurations.</p>
+    <div class="rules" id="compare-rules"></div>
     <p class="error" id="compare-error" hidden></p>
-    <div id="trace" class="trace" hidden></div>
-    <div class="cards" id="cards"></div>
+    <div class="panel">
+      <div class="scroll-x"><table class="summary" id="summary"></table></div>
+    </div>
+    <div class="panel">
+      <span class="label">How each player spent the time budget</span>
+      <div class="keys" id="keys"></div>
+      <div class="timelines" id="timelines"></div>
+      <div class="readout" id="readout" aria-live="polite"></div>
+    </div>
+    <div class="panel trace" id="trace"></div>
     <div class="legend" id="legend"></div>
   </section>
 
@@ -305,8 +333,6 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
   let cfg;            // parameters + chosen fundamentals for the next session
   let session;        // { cfg, history: [actions], states: [state], steps: [step] }
   let tab = "play";
-  let compare = null; // { key, rows }
-  let traceSel = null;
 
   function save() {
     try { localStorage.setItem(STORE, JSON.stringify({ cfg, tab })); } catch (e) { /* storage unavailable */ }
@@ -322,20 +348,30 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
     ["growth", "Growth", E.GROWTH_MODES],
   ];
 
-  function renderRules() {
-    $("rules").innerHTML = RULES.map(([key, title, modes]) => `
+  function rulesHTML(prefix) {
+    return RULES.map(([key, title, modes]) => `
       <div class="seg" role="radiogroup" aria-label="${title}">
         <span class="label">${title}</span>
         <div class="seg-opts">${modes.map(m => `
-          <input type="radio" name="r-${key}" id="r-${key}-${m}" value="${m}" ${cfg[key] === m ? "checked" : ""}>
-          <label for="r-${key}-${m}">${cap(m)}</label>`).join("")}
+          <input type="radio" name="${prefix}-${key}" id="${prefix}-${key}-${m}" value="${m}" data-key="${key}" ${cfg[key] === m ? "checked" : ""}>
+          <label for="${prefix}-${key}-${m}">${cap(m)}</label>`).join("")}
         </div>
       </div>`).join("");
-    $("rules").querySelectorAll("input").forEach(inp => inp.addEventListener("change", () => {
-      cfg[inp.name.slice(2)] = inp.value;
-      save();
-      if (!session.history.length) newSession(); else renderPlay();
-    }));
+  }
+
+  function renderRules() {
+    for (const [id, prefix] of [["rules", "r"], ["compare-rules", "cr"]]) {
+      $(id).innerHTML = rulesHTML(prefix);
+      $(id).querySelectorAll("input").forEach(inp => inp.addEventListener("change", () => setRule(inp.dataset.key, inp.value)));
+    }
+  }
+
+  function setRule(key, value) {
+    cfg[key] = value;
+    save();
+    renderRules();
+    if (!session.history.length) newSession(); else renderPlay();
+    if (tab === "compare") renderCompare();
   }
 
   function newSession(history = []) {
@@ -436,7 +472,10 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
         <button class="btn" id="vs-opt">Compare with optimal</button></div>`;
       endEl.hidden = false;
       $("again").onclick = () => newSession();
-      $("vs-opt").onclick = () => { setTab("compare"); showTrace(c, "optimal"); };
+      $("vs-opt").onclick = () => {
+        for (const k of ["failure", "sequence", "growth"]) cfg[k] = c[k];
+        save(); renderRules(); tracePlayer = "optimal"; setTab("compare");
+      };
     } else endEl.hidden = true;
 
     $("log").innerHTML = session.steps.map((st, i) => `
@@ -449,109 +488,108 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
   const endReason = e => ({ time: "running out of time", eliminated: "elimination", "objective lost": "losing an objective" })[e] || e;
 
   // ---- Compare ----
+  const PLAYERS = ["optimal", ...Object.keys(E.ARCHETYPES)];
+  const KINDS = [["camp", "Camp"], ["objective", "Objective"], ["rest", "Rest"], ["rotation", "Rotation"]];
+  let tracePlayer = "optimal";
+  let compareRuns = null; // { key, c, runs }
+
   function outcome(c, run) {
     const s = run.final;
-    if (s.status === "won") return { cls: "won", text: `Won · ${s.time} left` };
-    return { cls: "lost", text: `Lost (${s.end}) · ${E.advancement(s)}/${c.objectives.length}` };
+    if (s.status === "won") return { cls: "won", text: "Won" };
+    return { cls: "lost", text: s.end === "time" ? "Out of time" : cap(s.end) };
   }
 
-  function configsFor(base) {
+  function solveAll(c) {
+    const key = JSON.stringify(c);
+    if (compareRuns && compareRuns.key === key) return compareRuns;
+    const runs = {};
+    for (const p of PLAYERS) runs[p] = p === "optimal" ? E.solve(c) : E.play(c, E.ARCHETYPES[p]);
+    compareRuns = { key, c, runs };
+    return compareRuns;
+  }
+
+  // Each step becomes a segment of time spent; delay penalties are their own segment.
+  function segments(c, run) {
     const out = [];
-    for (const f of E.FAILURE_MODES) for (const q of E.SEQUENCE_MODES) for (const g of E.GROWTH_MODES)
-      out.push(E.withFundamentals(base, f, q, g));
+    let s = E.start(c), at = 0;
+    run.steps.forEach((st, i) => {
+      const a = run.actions[i];
+      const kind = a.kind === E.ROTATE ? "rotation" : s.pos === E.CAMP ? "camp" : s.pos === E.REST ? "rest" : "objective";
+      const t = Math.min(st.time, s.time);
+      out.push({ kind, start: at, len: t, failed: st.failed, step: i, st });
+      at += t;
+      const delay = s.time - t - st.state.time;
+      if (delay > 0) { out.push({ kind: "delay", start: at, len: delay, failed: false, step: i, st }); at += delay; }
+      s = st.state;
+    });
     return out;
   }
 
-  function runCompare() {
-    const base = JSON.parse(JSON.stringify(cfg));
-    const key = JSON.stringify(Object.assign({}, base, { failure: 0, sequence: 0, growth: 0 }));
-    const configs = configsFor(base);
-    const rows = [];
-    $("run-compare").disabled = true;
-    $("compare-error").hidden = true;
-    traceSel = null; $("trace").hidden = true;
-    let i = 0;
-    const next = () => {
-      if (i === configs.length) {
-        compare = { key, rows };
-        $("run-compare").disabled = false;
-        $("compare-progress").textContent = "";
-        renderCompare();
-        return;
-      }
-      $("compare-progress").textContent = `Solving ${i + 1} of ${configs.length}…`;
-      setTimeout(() => {
-        const c = configs[i];
-        try {
-          const runs = { optimal: E.solve(c) };
-          for (const [n, a] of Object.entries(E.ARCHETYPES)) runs[n] = E.play(c, a);
-          rows.push({ c, runs });
-        } catch (err) {
-          $("compare-error").textContent = err.message;
-          $("compare-error").hidden = false;
-          $("run-compare").disabled = false;
-          $("compare-progress").textContent = "";
-          return;
-        }
-        i++;
-        renderCompare(rows);
-        next();
-      }, 16);
+  function renderCompare() {
+    const c = JSON.parse(JSON.stringify(cfg));
+    let res;
+    try { res = solveAll(c); $("compare-error").hidden = true; }
+    catch (err) { $("compare-error").textContent = err.message; $("compare-error").hidden = false; return; }
+    const runs = res.runs;
+
+    $("summary").innerHTML = `<thead><tr><th>Player</th><th>Result</th><th>Time left</th><th>Growth</th><th>Camp · rest · fail</th></tr></thead><tbody>` +
+      PLAYERS.map(p => {
+        const r = runs[p], o = outcome(c, r);
+        return `<tr data-p="${p}" aria-selected="${p === tracePlayer}" tabindex="0">
+          <td>${cap(p)}</td><td><span class="result ${o.cls}" title="${esc(o.text)}">${o.cls === "won" ? "Won" : "Lost"}</span></td>
+          <td>${r.final.time}</td><td>${r.final.growth}</td>
+          <td>${E.countEngaged(c, r, E.CAMP)} · ${E.countEngaged(c, r, E.REST)} · ${E.failures(r)}</td></tr>`;
+      }).join("") + "</tbody>";
+    $("summary").querySelectorAll("tr[data-p]").forEach(tr => {
+      const pick = () => { tracePlayer = tr.dataset.p; renderCompare(); };
+      tr.addEventListener("click", pick);
+      tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+    });
+
+    $("keys").innerHTML = KINDS.map(([k, label]) => `<span><i class="k-${k}"></i>${label}</span>`).join("") +
+      `<span><i class="k-delay"></i>Delay penalty</span><span><i class="failed"></i>Failed encounter</span>`;
+
+    const T = c.time;
+    const half = Math.round(T / 2);
+    $("timelines").innerHTML = PLAYERS.map(p => {
+      const r = runs[p], o = outcome(c, r);
+      const segs = segments(c, r);
+      return `<div class="tl">
+        <div class="tl-head"><b>${cap(p)}</b><span class="result ${o.cls}">${esc(o.text)}${r.final.status === "won" ? ` · ${r.final.time} left` : ""}</span></div>
+        <div class="track">${segs.map((g, j) => `<button class="seg-bar k-${g.kind}${g.failed ? " failed" : ""}" data-p="${p}" data-j="${j}"
+          style="left:${100 * g.start / T}%;width:${100 * g.len / T}%"
+          aria-label="${esc(cap(p))} step ${g.step + 1}: ${esc(g.kind === "delay" ? "delay penalty" : g.st.message)}"></button>`).join("")}</div>
+      </div>`;
+    }).join("") + `<div class="axis"><span style="left:0">0</span><span style="left:50%">${half}</span><span style="left:100%">${T} time</span></div>`;
+
+    const read = (p, j, btn) => {
+      const g = segments(c, runs[p])[j];
+      $("timelines").querySelectorAll(".seg-bar.on").forEach(b => b.classList.remove("on"));
+      btn.classList.add("on");
+      const what = g.kind === "delay" ? `Delay penalty: −${g.len} time` : `${esc(g.st.message)} · −${g.st.time} time, −${g.st.cost} attrition`;
+      $("readout").innerHTML = `<b>${cap(p)}, step ${g.step + 1}</b> at time ${g.start}: ${what}`;
     };
-    next();
-  }
+    $("timelines").querySelectorAll(".seg-bar").forEach(b => {
+      const go = () => read(b.dataset.p, +b.dataset.j, b);
+      b.addEventListener("click", go);
+      b.addEventListener("mouseenter", go);
+      b.addEventListener("focus", go);
+    });
+    $("readout").textContent = "Tap a segment to see that step.";
 
-  function renderCompare(partial) {
-    const rows = partial || (compare && compare.rows) || [];
-    const stale = compare && !partial && compare.key !== JSON.stringify(Object.assign({}, cfg, { failure: 0, sequence: 0, growth: 0 }));
-    $("cards").innerHTML = (stale ? `<p class="note">Settings changed since this comparison. Run it again to update.</p>` : "") +
-      rows.map((r, idx) => {
-        const o = outcome(r.c, r.runs.optimal), opt = r.runs.optimal;
-        const sel = traceSel && traceSel.idx === idx;
-        return `<button class="card" data-idx="${idx}" aria-pressed="${sel ? "true" : "false"}">
-          <span class="head"><span>${cap(r.c.failure)} · ${cap(r.c.sequence)} · ${cap(r.c.growth)}</span>
-          <span class="result ${o.cls}">${o.text}</span></span>
-          <span class="small muted">Optimal: ${E.countEngaged(r.c, opt, E.CAMP)} camps · ${E.countEngaged(r.c, opt, E.REST)} rests ·
-            ${E.failures(opt)} failures · growth ${opt.final.growth}</span>
-          <span class="arch">${Object.keys(E.ARCHETYPES).map(n => {
-            const a = outcome(r.c, r.runs[n]);
-            return `<div><span class="label">${n}</span><span class="result ${a.cls}">${a.text}</span></div>`;
-          }).join("")}</span></button>`;
-      }).join("");
-    $("cards").querySelectorAll(".card").forEach(b => b.addEventListener("click", () => {
-      const r = rows[+b.dataset.idx];
-      showTrace(r.c, (traceSel && traceSel.player) || "optimal", +b.dataset.idx, r.runs);
-    }));
-    $("legend").innerHTML = Object.entries(E.ARCHETYPES).map(([n, a]) => `<span><b>${cap(n)}</b>: ${a.summary}</span>`).join("");
-  }
-
-  function showTrace(c, player, idx = null, runs = null) {
-    if (!runs) {
-      runs = {};
-      try { runs[player] = player === "optimal" ? E.solve(c) : E.play(c, E.ARCHETYPES[player]); }
-      catch (err) { $("compare-error").textContent = err.message; $("compare-error").hidden = false; return; }
-    }
-    const run = runs[player] || (runs[player] = player === "optimal" ? E.solve(c) : E.play(c, E.ARCHETYPES[player]));
-    traceSel = { idx, player };
-    const players = ["optimal", ...Object.keys(E.ARCHETYPES)];
-    const o = outcome(c, run);
+    const run = runs[tracePlayer];
     $("trace").innerHTML = `
-      <div class="row" style="justify-content:space-between">
-        <h2>${cap(c.failure)} · ${cap(c.sequence)} · ${cap(c.growth)}</h2>
-        <button class="btn" id="close-trace">Close</button>
-      </div>
-      <div class="seg-opts" role="radiogroup" aria-label="Player">${players.map(p => `
-        <input type="radio" name="trace-player" id="tp-${p}" value="${p}" ${p === player ? "checked" : ""}>
+      <span class="label">Steps</span>
+      <div class="seg-opts" role="radiogroup" aria-label="Player">${PLAYERS.map(p => `
+        <input type="radio" name="trace-player" id="tp-${p}" value="${p}" ${p === tracePlayer ? "checked" : ""}>
         <label for="tp-${p}">${cap(p)}</label>`).join("")}</div>
-      <p class="result ${o.cls}">${o.text} · ${E.countEngaged(c, run, E.CAMP)} camps · ${E.countEngaged(c, run, E.REST)} rests · ${E.failures(run)} failures</p>
       <ol>${run.steps.map((st, i) => `<li class="${st.failed ? "fail" : ""}"><span>${i + 1}. ${esc(st.message)}</span>
         <span class="after">time ${st.state.time} · attrition ${st.state.attrition} · growth ${st.state.growth} · adv ${E.advancement(st.state)}</span></li>`).join("")}</ol>`;
-    $("trace").hidden = false;
     $("trace").querySelectorAll("input[name=trace-player]").forEach(inp =>
-      inp.addEventListener("change", () => showTrace(c, inp.value, idx, runs)));
-    $("close-trace").onclick = () => { traceSel = null; $("trace").hidden = true; renderCompare(); };
-    renderCompare();
-    $("trace").scrollIntoView({ behavior: "smooth", block: "start" });
+      inp.addEventListener("change", () => { tracePlayer = inp.value; renderCompare(); }));
+
+    $("legend").innerHTML = Object.entries(E.ARCHETYPES).map(([n, a]) => `<span><b>${cap(n)}</b>: ${a.summary}</span>`).join("") +
+      `<span><b>Optimal</b>: exhaustive search with perfect information</span>`;
   }
 
   // ---- Settings ----
@@ -666,9 +704,7 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
       $("tab-" + name).hidden = name !== t;
       $("tab-btn-" + name).setAttribute("aria-selected", String(name === t));
     }
-    if (t === "compare") {
-      if (!compare) runCompare(); else renderCompare();
-    }
+    if (t === "compare") renderCompare();
     window.scrollTo(0, 0);
   }
 
@@ -686,7 +722,6 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
 
     document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
     $("new-session").addEventListener("click", () => newSession());
-    $("run-compare").addEventListener("click", runCompare);
     $("add-obj").addEventListener("click", () => {
       const next = JSON.parse(JSON.stringify(cfg));
       next.objectives.push({ name: `Objective ${next.objectives.length + 1}`, difficulty: 8, time: 3, growth: 1 });
