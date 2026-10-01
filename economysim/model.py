@@ -9,6 +9,7 @@ from typing import NamedTuple, Optional
 FAILURE_MODES = ("elimination", "delay")
 SEQUENCE_MODES = ("fixed", "free")
 GROWTH_MODES = ("renewable", "finite", "diminishing")
+RAMP_KINDS = ("none", "linear", "table")
 
 # Positions. Objectives are positions 0..N-1.
 NOWHERE = -1  # between locations, e.g. after clearing a camp or objective
@@ -31,11 +32,13 @@ class Objective:
 class Ramp:
     """Challenge added at Advancement k."""
 
-    kind: str = "linear"  # "linear": rate * k; "table": table[k], last value repeats
+    kind: str = "linear"  # "none": 0; "linear": rate * k; "table": table[k], last value repeats
     rate: int = 3
     table: tuple[int, ...] = ()
 
     def __call__(self, k: int) -> int:
+        if self.kind == "none":
+            return 0
         if self.kind == "linear":
             return self.rate * k
         if self.kind == "table":
@@ -95,6 +98,8 @@ class Config:
 
     # Curves
     ramp: Ramp = field(default_factory=Ramp)
+    # Camp challenge scaling with Advancement, separate from objectives.
+    camp_ramp: Ramp = field(default_factory=lambda: Ramp(kind="none", rate=1))
     cost: Cost = field(default_factory=Cost)
 
     # Delay variants
@@ -119,6 +124,9 @@ class Config:
             raise ValueError("every encounter must cost at least 1 time")
         if self.delay_recover < 1:
             raise ValueError("delay_recover must be at least 1")
+        for name in ("ramp", "camp_ramp"):
+            if getattr(self, name).kind not in RAMP_KINDS:
+                raise ValueError(f"{name} kind must be one of {RAMP_KINDS}")
 
     def fundamentals(self) -> str:
         return f"{self.failure}/{self.sequence}/{self.growth}"
@@ -139,10 +147,11 @@ class Config:
             raise ValueError(f"unknown config keys: {sorted(unknown)}")
         if "objectives" in data:
             data["objectives"] = tuple(Objective(**o) for o in data["objectives"])
-        if "ramp" in data:
-            ramp = dict(data["ramp"])
-            ramp["table"] = tuple(ramp.get("table", ()))
-            data["ramp"] = Ramp(**ramp)
+        for key in ("ramp", "camp_ramp"):
+            if key in data:
+                ramp = dict(data[key])
+                ramp["table"] = tuple(ramp.get("table", ()))
+                data[key] = Ramp(**ramp)
         if "cost" in data:
             data["cost"] = Cost(**data["cost"])
         return cls(**data)
@@ -197,6 +206,10 @@ def challenge(cfg: Config, s: State, i: int) -> int:
     return cfg.objectives[i].difficulty + cfg.ramp(advancement(s))
 
 
+def camp_challenge(cfg: Config, s: State) -> int:
+    return cfg.camp_challenge + cfg.camp_ramp(advancement(s))
+
+
 def camp_yield(cfg: Config, s: State) -> int:
     if cfg.growth == "finite":
         return cfg.camp_yield if s.camps < cfg.camp_count else 0
@@ -241,7 +254,7 @@ def action_costs(cfg: Config, s: State, a: Action) -> tuple[int, int]:
     if a.kind == ROTATE:
         return cfg.rotation_time, cfg.rotation_attrition
     if s.pos == CAMP:
-        return cfg.camp_time, cfg.cost(cfg.camp_challenge, s.growth)
+        return cfg.camp_time, cfg.cost(camp_challenge(cfg, s), s.growth)
     if s.pos == REST:
         return cfg.rest_time, 0
     return cfg.objectives[s.pos].time, cfg.cost(challenge(cfg, s, s.pos), s.growth)

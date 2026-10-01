@@ -142,6 +142,8 @@ main .wrap { padding-top: 16px; }
 .banner.lost h2 { color: var(--lost); }
 
 /* Log */
+.logwrap { display: grid; gap: 6px; justify-items: start; }
+.logwrap .log { width: 100%; }
 .log { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; font-size: 0.9rem; }
 .log li { display: grid; grid-template-columns: 2.2em 1fr; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); }
 .log li .n { color: var(--muted); font-family: var(--font-data); font-size: 0.8rem; padding-top: 2px; }
@@ -240,12 +242,6 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
 <main>
   <!-- PLAY -->
   <section id="tab-play" class="wrap" role="tabpanel">
-    <div class="rules" id="rules"></div>
-    <div class="row">
-      <button class="btn primary" id="new-session">New session</button>
-      <span class="note" id="rules-note" hidden>New rules apply when you start a new session.</span>
-    </div>
-
     <div class="status" aria-live="polite">
       <div class="meter time">
         <div class="meter-head"><span class="label">Time</span><span class="value" id="v-time"></span></div>
@@ -270,9 +266,19 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
       <div class="objlist" id="objlist"></div>
     </details>
 
-    <div>
+    <div class="logwrap">
       <span class="label">Session log</span>
       <ol class="log" id="log"></ol>
+      <button class="btn small" id="log-toggle" hidden></button>
+    </div>
+
+    <div class="group">
+      <h2>Session rules</h2>
+      <div class="rules" id="rules"></div>
+      <div class="row">
+        <button class="btn primary" id="new-session">New session</button>
+        <span class="note" id="rules-note" hidden>New rules apply when you start a new session.</span>
+      </div>
     </div>
   </section>
 
@@ -400,7 +406,8 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
         sub = `Objective · challenge ${ch} · taking it costs ${E.cost(c, ch, s.growth)} attrition at your growth`;
       } else if (a.target === E.CAMP) {
         title = "Travel to a camp";
-        sub = `Camp yields +${E.campYield(c, s)} growth · costs ${E.cost(c, c.camp_challenge, s.growth)} attrition at your growth`;
+        const cc = E.campChallenge(c, s);
+        sub = `Camp · challenge ${cc} · yields +${E.campYield(c, s)} growth · costs ${E.cost(c, cc, s.growth)} attrition at your growth`;
       } else {
         title = "Travel to a rest site";
         sub = `Rest restores up to ${c.rest_restore} attrition`;
@@ -479,12 +486,19 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
       };
     } else endEl.hidden = true;
 
-    $("log").innerHTML = session.steps.map((st, i) => `
+    const entries = session.steps.map((st, i) => `
       <li class="${st.failed ? "fail" : ""}"><span class="n">${i + 1}</span>
       <span><span class="msg">${esc(st.message)}</span>
       <span class="after">time ${st.state.time} · attrition ${st.state.attrition} · growth ${st.state.growth}</span></span></li>`
-    ).reverse().join("");
+    ).reverse();
+    const shown = logOpen ? entries : entries.slice(0, LOG_RECENT);
+    $("log").innerHTML = shown.join("") || `<li class="muted"><span></span><span>No turns yet. Pick an action above.</span></li>`;
+    $("log-toggle").hidden = entries.length <= LOG_RECENT;
+    $("log-toggle").textContent = logOpen ? "Show recent only" : `Show all ${entries.length} turns`;
   }
+
+  const LOG_RECENT = 5;
+  let logOpen = false;
 
   const endReason = e => ({ time: "running out of time", eliminated: "elimination", "objective lost": "losing an objective" })[e] || e;
 
@@ -600,8 +614,10 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
               ["camp_count", "Camps (finite)"], ["camp_decay", "Decay per camp (diminishing)"]]],
     ["Rest", [["rest_time", "Time"], ["rest_restore", "Attrition restored"], ["rest_sites", "Rest sites"]]],
     ["Rotation", [["rotation_time", "Time"], ["rotation_attrition", "Attrition"]]],
-    ["Challenge ramp", [["ramp.kind", "Shape", ["linear", "table"]], ["ramp.rate", "Rate per objective (linear)"],
+    ["Objective challenge ramp", [["ramp.kind", "Shape", ["none", "linear", "table"]], ["ramp.rate", "Rate per objective (linear)"],
                         ["ramp.table", "Table, comma separated"]]],
+    ["Camp challenge scaling", [["camp_ramp.kind", "Shape", ["none", "linear", "table"]], ["camp_ramp.rate", "Rate per objective (linear)"],
+                        ["camp_ramp.table", "Table, comma separated"]]],
     ["Attrition cost", [["cost.floor", "Minimum cost"], ["cost.scale", "Scale", null, "0.1"]]],
     ["Delay (when full attrition is delay)", [["delay_time", "Time lost"], ["delay_recover", "Attrition after recovery"],
       ["delay_growth_loss", "Growth lost"], ["delay_retry", "Failed encounter can be retried", "bool"],
@@ -617,7 +633,7 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
         const id = "s-" + path.replace(".", "-"), v = getPath(cfg, path);
         if (kind === "bool") return `<div class="field check"><input type="checkbox" id="${id}" data-path="${path}" data-kind="bool" ${v ? "checked" : ""}><label for="${id}">${label}</label></div>`;
         if (Array.isArray(kind)) return `<div class="field"><label for="${id}">${label}</label><select id="${id}" data-path="${path}" data-kind="str">${kind.map(k => `<option ${k === v ? "selected" : ""}>${k}</option>`).join("")}</select></div>`;
-        if (path === "ramp.table") return `<div class="field"><label for="${id}">${label}</label><input id="${id}" data-path="${path}" data-kind="list" value="${v.join(", ")}" inputmode="numeric"></div>`;
+        if (path.endsWith(".table")) return `<div class="field"><label for="${id}">${label}</label><input id="${id}" data-path="${path}" data-kind="list" value="${v.join(", ")}" inputmode="numeric"></div>`;
         return `<div class="field"><label for="${id}">${label}</label><input type="number" id="${id}" data-path="${path}" data-kind="${stepv ? "float" : "int"}" step="${stepv || 1}" value="${v}" inputmode="${stepv ? "decimal" : "numeric"}"></div>`;
       }).join("")}</div></div>`).join("");
     $("groups").querySelectorAll("[data-path]").forEach(el => el.addEventListener("change", onField));
@@ -665,13 +681,22 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
     });
   }
 
+  function withDefaults(partial) {
+    const d = E.defaultConfig();
+    const next = Object.assign(d, partial);
+    for (const k of ["ramp", "camp_ramp", "cost"]) next[k] = Object.assign(E.defaultConfig()[k], partial[k] || {});
+    return next;
+  }
+
   function checkConfig(next) {
     const ints = ["time", "attrition", "camp_time", "camp_challenge", "camp_yield", "camp_count", "camp_decay", "rest_time",
       "rest_restore", "rest_sites", "rotation_time", "rotation_attrition", "delay_time", "delay_recover", "delay_growth_loss"];
     for (const k of ints) if (!Number.isInteger(next[k]) || next[k] < 0) throw new Error(`${k} must be a whole number of 0 or more`);
-    if (!Number.isInteger(next.ramp.rate)) throw new Error("ramp rate must be a whole number");
-    if (next.ramp.table.some(x => !Number.isInteger(x))) throw new Error("ramp table must be whole numbers");
-    if (next.ramp.kind === "table" && !next.ramp.table.length) throw new Error("a table ramp needs at least one value");
+    for (const [k, name] of [["ramp", "objective ramp"], ["camp_ramp", "camp scaling"]]) {
+      if (!Number.isInteger(next[k].rate)) throw new Error(`${name} rate must be a whole number`);
+      if (next[k].table.some(x => !Number.isInteger(x))) throw new Error(`${name} table must be whole numbers`);
+      if (next[k].kind === "table" && !next[k].table.length) throw new Error(`a table ${name} needs at least one value`);
+    }
     if (!Number.isInteger(next.cost.floor) || !Number.isFinite(next.cost.scale)) throw new Error("cost floor and scale must be numbers");
     if (next.objectives.length > 8) throw new Error("use 8 objectives or fewer so the search stays fast");
     if (next.time > 250) throw new Error("keep the time budget at 250 or less so the search stays fast");
@@ -713,16 +738,18 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
   function boot(data) {
     const stored = load();
     cfg = E.defaultConfig();
-    const candidate = (data && data.cfg) || (stored && stored.cfg);
-    if (candidate) {
-      try { checkConfig(candidate); cfg = candidate; } catch (e) { /* keep defaults */ }
+    const saved = (data && data.cfg) || (stored && stored.cfg);
+    if (saved) {
+      // Saved settings may predate newer parameters; fill those from the defaults.
+      try { const candidate = withDefaults(saved); checkConfig(candidate); cfg = candidate; } catch (e) { /* keep defaults */ }
     }
     renderRules();
     renderSettings();
     try { newSession((data && data.history) || []); } catch (e) { newSession(); }
 
     document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
-    $("new-session").addEventListener("click", () => newSession());
+    $("new-session").addEventListener("click", () => { newSession(); window.scrollTo(0, 0); });
+    $("log-toggle").addEventListener("click", () => { logOpen = !logOpen; renderPlay(); });
     $("add-obj").addEventListener("click", () => {
       const next = JSON.parse(JSON.stringify(cfg));
       next.objectives.push({ name: `Objective ${next.objectives.length + 1}`, difficulty: 8, time: 3, growth: 1 });
@@ -739,10 +766,7 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
       let parsed;
       try { parsed = JSON.parse($("json").value); }
       catch (e) { $("json-status").textContent = "That is not valid JSON."; return; }
-      const next = Object.assign(E.defaultConfig(), parsed);
-      next.ramp = Object.assign(E.defaultConfig().ramp, parsed.ramp || {});
-      next.cost = Object.assign(E.defaultConfig().cost, parsed.cost || {});
-      if (commit(next, true)) $("json-status").textContent = "Applied.";
+      if (commit(withDefaults(parsed), true)) $("json-status").textContent = "Applied.";
     });
     let armed = false;
     $("reset").addEventListener("click", () => {

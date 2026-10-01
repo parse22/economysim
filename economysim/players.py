@@ -18,6 +18,7 @@ from .model import (
     Step,
     advancement,
     available_objectives,
+    camp_challenge,
     camp_yield,
     challenge,
     legal_actions,
@@ -127,7 +128,7 @@ class Archetype:
             owed = self.camp_after_failure and s.failures > s.camps
             wants = self.grow_until is not None and cost > self.grow_until * cfg.attrition
             if owed or wants:
-                target, cost = CAMP, cfg.cost(cfg.camp_challenge, s.growth)
+                target, cost = CAMP, cfg.cost(camp_challenge(cfg, s), s.growth)
 
         if can_rest:
             # From a rest site at full attrition: rotate, then the encounter.

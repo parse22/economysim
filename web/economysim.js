@@ -23,6 +23,7 @@
     rest_time: 3, rest_restore: 6, rest_sites: 1,
     rotation_time: 2, rotation_attrition: 1,
     ramp: { kind: "linear", rate: 3, table: [] },
+    camp_ramp: { kind: "none", rate: 1, table: [] },
     cost: { kind: "linear", floor: 1, scale: 1.0 },
     delay_time: 8, delay_recover: 6, delay_growth_loss: 0,
     delay_retry: true, delay_relocate: false,
@@ -39,7 +40,8 @@
     const times = [cfg.camp_time, cfg.rest_time, cfg.rotation_time, ...cfg.objectives.map(o => o.time)];
     if (Math.min(...times) < 1) throw new Error("every encounter must cost at least 1 time");
     if (cfg.delay_recover < 1) throw new Error("delay_recover must be at least 1");
-    if (!["linear", "table"].includes(cfg.ramp.kind)) throw new Error("ramp kind must be linear or table");
+    for (const k of ["ramp", "camp_ramp"])
+      if (!["none", "linear", "table"].includes(cfg[k].kind)) throw new Error(`${k} kind must be none, linear or table`);
     if (cfg.cost.kind !== "linear") throw new Error("cost kind must be linear");
     return cfg;
   }
@@ -60,12 +62,14 @@
     return f % 2 === 0 ? f : f + 1;
   }
 
-  function ramp(cfg, k) {
-    const r = cfg.ramp;
+  function rampOf(r, k) {
+    if (r.kind === "none") return 0;
     if (r.kind === "linear") return r.rate * k;
     if (r.kind === "table") return r.table.length ? r.table[Math.min(k, r.table.length - 1)] : 0;
     throw new Error(`unknown ramp kind ${r.kind}`);
   }
+  const ramp = (cfg, k) => rampOf(cfg.ramp, k);
+  const campRamp = (cfg, k) => rampOf(cfg.camp_ramp, k);
 
   function cost(cfg, challenge, growth) {
     return Math.max(cfg.cost.floor, pyRound(cfg.cost.scale * (challenge - growth)));
@@ -78,6 +82,8 @@
   function advancement(s) { let n = 0, d = s.done; while (d) { n += d & 1; d >>= 1; } return n; }
   const allDone = cfg => (1 << cfg.objectives.length) - 1;
   const challenge = (cfg, s, i) => cfg.objectives[i].difficulty + ramp(cfg, advancement(s));
+
+  const campChallenge = (cfg, s) => cfg.camp_challenge + campRamp(cfg, advancement(s));
 
   function campYield(cfg, s) {
     if (cfg.growth === "finite") return s.camps < cfg.camp_count ? cfg.camp_yield : 0;
@@ -111,7 +117,7 @@
 
   function actionCosts(cfg, s, a) {
     if (a.kind === ROTATE) return [cfg.rotation_time, cfg.rotation_attrition];
-    if (s.pos === CAMP) return [cfg.camp_time, cost(cfg, cfg.camp_challenge, s.growth)];
+    if (s.pos === CAMP) return [cfg.camp_time, cost(cfg, campChallenge(cfg, s), s.growth)];
     if (s.pos === REST) return [cfg.rest_time, 0];
     return [cfg.objectives[s.pos].time, cost(cfg, challenge(cfg, s, s.pos), s.growth)];
   }
@@ -251,7 +257,7 @@
       if (campYield(cfg, s) > 0) {
         const owed = campAfterFailure && s.failures > s.camps;
         const wants = growUntil !== null && c > growUntil * cfg.attrition;
-        if (owed || wants) { target = CAMP; c = cost(cfg, cfg.camp_challenge, s.growth); }
+        if (owed || wants) { target = CAMP; c = cost(cfg, campChallenge(cfg, s), s.growth); }
       }
 
       if (canRest) {
@@ -279,7 +285,7 @@
 
   const api = {
     NOWHERE, CAMP, REST, ROTATE, ENGAGE, FAILURE_MODES, SEQUENCE_MODES, GROWTH_MODES, ARCHETYPES,
-    defaultConfig, validate, withFundamentals, fundamentals, ramp, cost, start, advancement, challenge,
+    defaultConfig, validate, withFundamentals, fundamentals, ramp, campRamp, campChallenge, cost, start, advancement, challenge,
     campYield, availableObjectives, positionName, legalActions, actionCosts, describe, step,
     play, solve, countEngaged, failures,
   };

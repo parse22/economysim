@@ -22,6 +22,9 @@ class Curves(unittest.TestCase):
         r = Ramp(kind="table", table=(0, 2, 5))
         self.assertEqual([r(k) for k in range(5)], [0, 2, 5, 5, 5])
 
+    def test_none_ramp_is_zero(self):
+        self.assertEqual(Ramp(kind="none", rate=5)(3), 0)
+
     def test_cost_has_floor(self):
         self.assertEqual(Cost(floor=1)(5, 10), 1)
         self.assertEqual(Cost()(9, 4), 5)
@@ -39,6 +42,16 @@ class Encounters(unittest.TestCase):
         cfg = Config(objectives=ONE + ONE, ramp=Ramp(rate=3))
         s = at(cfg, 1, done=1)
         self.assertEqual(step(cfg, s, Action(ENGAGE)).cost, 5 + 3)
+
+    def test_camp_challenge_fixed_by_default(self):
+        cfg = Config(camp_challenge=5)
+        r = step(cfg, at(cfg, CAMP, done=0b11), Action(ENGAGE))
+        self.assertEqual(r.cost, 5)
+
+    def test_camp_ramp_scales_with_advancement_separately(self):
+        cfg = Config(camp_challenge=5, ramp=Ramp(rate=3), camp_ramp=Ramp(kind="linear", rate=1))
+        r = step(cfg, at(cfg, CAMP, done=0b11), Action(ENGAGE))
+        self.assertEqual(r.cost, 5 + 2)
 
     def test_rest_restores_up_to_cap_and_only_at_rest_site(self):
         cfg = Config()
@@ -219,6 +232,8 @@ class ConfigLoading(unittest.TestCase):
             Config.from_dict({"tiem": 5})
         with self.assertRaises(ValueError):
             Config(growth="infinite")
+        with self.assertRaises(ValueError):
+            Config(camp_ramp=Ramp(kind="steep"))
 
 
 class Game(unittest.TestCase):

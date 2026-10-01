@@ -46,6 +46,8 @@ def configs():
         replace(base, delay_growth_loss=2, delay_relocate=True, time=60),
         replace(base, delay_retry=False, attrition=10),
         replace(base, ramp=Ramp(kind="table", table=(0, 2, 7, 9)), cost=Cost(floor=2, scale=1.5)),
+        replace(base, camp_ramp=Ramp(kind="linear", rate=2), time=90),
+        replace(base, camp_ramp=Ramp(kind="table", table=(0, 1, 3)), ramp=Ramp(kind="none")),
     ]
     for v in variants:
         yield v.with_fundamentals("delay", "free", "finite")

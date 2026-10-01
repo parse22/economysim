@@ -33,7 +33,7 @@ difficulty plus a ramp driven by Advancement.
 
 | Encounter   | Time    | Attrition                   | Growth  | Advancement |
 |-------------|---------|-----------------------------|---------|-------------|
-| Camp        | −t_camp | −cost(C_camp, G)            | +yield  |             |
+| Camp        | −t_camp | −cost(C_camp + camp_ramp(k), G) | +yield |           |
 | Objective i | −t_i    | −cost(d_i + ramp(k), G)     | +g_i    | +1          |
 | Rest        | −t_rest | +restore (capped at A)      |         |             |
 | Rotation    | −t_rot  | −a_rot                      |         |             |
@@ -41,7 +41,10 @@ difficulty plus a ramp driven by Advancement.
 - `G` is current Growth; `k` is current Advancement.
 - `cost(C, G)` is the attrition an encounter of challenge `C` drains at
   Growth `G`. It falls as Growth rises relative to challenge.
-- `ramp(k)` is the challenge added at Advancement `k`.
+- `ramp(k)` is the challenge added to objectives at Advancement `k`.
+- `camp_ramp(k)` is the challenge added to camps at Advancement `k`. It is
+  separate from the objective ramp and is off (`none`) by default, so camps
+  keep a fixed challenge unless it is set.
 - Both curves are configuration parameters for sim tuning (see Curves).
 - Objectives are heterogeneous (`d_i`, `t_i`, `g_i`). This is what makes
   sequence meaningful: under free sequence, the player chooses which objective
@@ -121,7 +124,7 @@ still required to reach growth in every mode.
 |-------------|---------------------------------------------------------------|
 | Session     | T, A, N                                                       |
 | Objectives  | d_i, t_i, g_i for each objective                              |
-| Camp        | t_camp, C_camp, yield, camp count (finite), decay (diminishing) |
+| Camp        | t_camp, C_camp, yield, camp count (finite), decay (diminishing), camp_ramp |
 | Rest        | t_rest, restore, number of rest sites                         |
 | Rotation    | t_rot, a_rot                                                  |
 | Curves      | cost() and ramp(), selected and tuned per configuration       |
@@ -133,7 +136,8 @@ still required to reach growth in every mode.
 be tuned per configuration. Each is chosen from a small set of named forms
 with numeric parameters, for example:
 
-- `ramp(k)`: linear (`rate × k`), or an explicit per-step table.
+- `ramp(k)` and `camp_ramp(k)`: none (always 0), linear (`rate × k`), or an
+  explicit per-step table.
 - `cost(C, G)`: linear difference with a floor (`max(c_min, C − G)`).
 
 Further forms can be added as tuning needs them.
