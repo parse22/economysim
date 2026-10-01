@@ -41,11 +41,29 @@ difficulty plus a ramp driven by Advancement.
 - `G` is current Growth; `k` is current Advancement.
 - `cost(C, G)` is the attrition an encounter of challenge `C` drains at
   Growth `G`. It falls as Growth rises relative to challenge.
+- `ramp(k)` is the challenge added at Advancement `k`.
+- Both curves are configuration parameters for sim tuning (see Curves).
 - Objectives are heterogeneous (`d_i`, `t_i`, `g_i`). This is what makes
   sequence meaningful: under free sequence, the player chooses which objective
   to take while the ramp is low.
-- Rotation is repositioning to another location. Its attrition cost is fixed;
-  it is not contested.
+- Rotation is movement on the map from one location to another. Its attrition
+  cost is fixed; it is not contested.
+
+## Time and space
+
+The simulation is turn based. Time and position are abstracted to discrete
+units:
+
+- **Time** is an integer count of turns. Every encounter costs a whole number
+  of turns.
+- **Position** is a set of discrete locations. Each location holds one
+  encounter: a camp, an objective or a rest site.
+- An encounter can only be taken at the player's current location. Moving to
+  another location is a Rotation.
+- Camps and objectives are consumed when completed. Rest sites are reusable.
+- Rest is only available at rest sites. The number of rest sites is a
+  parameter.
+- Rotation cost is uniform between any two locations for now.
 
 ## Full attrition
 
@@ -98,17 +116,31 @@ still required to reach growth in every mode.
 | Session     | T, A, N                                                       |
 | Objectives  | d_i, t_i, g_i for each objective                              |
 | Camp        | t_camp, C_camp, yield, camp count (finite), decay (diminishing) |
-| Rest        | t_rest, restore                                               |
+| Rest        | t_rest, restore, number of rest sites                         |
 | Rotation    | t_rot, a_rot                                                  |
-| Curves      | shape of cost(), shape of ramp()                              |
+| Curves      | cost() and ramp(), selected and tuned per configuration       |
 | Delay       | t_delay, A_recover, g_loss, retry, relocate                   |
+
+## Curves
+
+`cost()` and `ramp()` are configurable rather than fixed, so their shape can
+be tuned per configuration. Each is chosen from a small set of named forms
+with numeric parameters, for example:
+
+- `ramp(k)`: linear (`rate × k`), or an explicit per-step table.
+- `cost(C, G)`: linear difference with a floor (`max(c_min, C − G)`).
+
+Further forms can be added as tuning needs them.
+
+## Out of scope for now
+
+- Rest anywhere (a possible later sim option).
+- Optional or bypassable objectives.
+- Non-uniform distances between locations.
 
 ## Not yet specified
 
-- When Rotation is required (for example, between encounters at different
-  locations), and whether Rest is available anywhere.
-- The concrete shapes of `cost()` and `ramp()`.
-- How a player is modelled when the simulation is run.
+- How player decisions are made when the simulation is run.
 
 ## Notation
 
