@@ -63,7 +63,8 @@ browser.
 
 - **optimal**: exhaustive search with perfect information; the best outcome
   the configuration permits.
-- **rusher**, **balanced**, **cautious**: rule-based archetypes
+- **rusher** (always attacks; camps once after each failure), **balanced**,
+  **cautious**: rule-based archetypes
   (`economysim/players.py`).
 
 ## Layout

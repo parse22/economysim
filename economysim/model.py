@@ -163,6 +163,7 @@ class State(NamedTuple):
     done: int = 0         # bitmask of completed objectives
     pos: int = NOWHERE
     camps: int = 0        # camps used so far
+    failures: int = 0     # encounters failed through full attrition
     status: str = "active"  # "active" | "won" | "lost"
     end: str = ""         # why the session ended
 
@@ -297,6 +298,7 @@ def step(cfg: Config, s: State, a: Action, check: bool = True) -> Step:
 
 def _full_attrition(cfg: Config, s: State, a: Action, t: int, cost: int, label: str) -> Step:
     msg = f"{label}: FAILED, full attrition"
+    s = s._replace(failures=s.failures + 1)
     if cfg.failure == "elimination":
         return Step(_end(s._replace(attrition=0), "lost", "eliminated"), t, cost, True, msg + ", eliminated")
 

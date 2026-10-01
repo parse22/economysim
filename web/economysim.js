@@ -72,7 +72,7 @@
   }
 
   function start(cfg) {
-    return { time: cfg.time, attrition: cfg.attrition, growth: 0, done: 0, pos: NOWHERE, camps: 0, status: "active", end: "" };
+    return { time: cfg.time, attrition: cfg.attrition, growth: 0, done: 0, pos: NOWHERE, camps: 0, failures: 0, status: "active", end: "" };
   }
 
   function advancement(s) { let n = 0, d = s.done; while (d) { n += d & 1; d >>= 1; } return n; }
@@ -157,6 +157,7 @@
   function fullAttrition(cfg, s, a, t, c, label) {
     let msg = `${label}: FAILED, full attrition`;
     const result = (state, m) => ({ state, time: t, cost: c, failed: true, message: m });
+    s = Object.assign({}, s, { failures: s.failures + 1 });
     if (cfg.failure === "elimination")
       return result(end(Object.assign({}, s, { attrition: 0 }), "lost", "eliminated"), msg + ", eliminated");
 
@@ -202,8 +203,11 @@
 
   const failures = run => run.steps.filter(s => s.failed).length;
 
-  // Win first, then advancement, then leftover time, attrition and growth.
-  const score = s => [s.status === "won" ? 1 : 0, advancement(s), s.time, s.attrition, s.growth];
+  // A win ranks above any loss, then by leftover time, attrition and growth.
+  // Losses rank by advancement, then growth, then running out of time over elimination.
+  const score = s => s.status === "won"
+    ? [1, advancement(s), s.time, s.attrition, s.growth]
+    : [0, advancement(s), s.growth, s.end === "time" ? 1 : 0, 0];
   function better(a, b) {
     for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] > b[i];
     return false;
@@ -213,7 +217,7 @@
 
   function solve(cfg) {
     const memo = new Map();
-    const key = s => `${s.time},${s.attrition},${s.growth},${s.done},${s.pos},${cfg.growth === "renewable" ? 0 : s.camps},${s.status}`;
+    const key = s => `${s.time},${s.attrition},${s.growth},${s.done},${s.pos},${cfg.growth === "renewable" ? 0 : s.camps},${s.status},${s.end}`;
     function best(s) {
       const k = key(s);
       const hit = memo.get(k);
@@ -234,22 +238,31 @@
     return play(cfg, (cfg, s) => best(s)[1]);
   }
 
-  function archetype(name, growUntil, restBelow, summary) {
+  function archetype(name, growUntil, restBelow, campAfterFailure, summary) {
     const decide = (cfg, s) => {
       const options = availableObjectives(cfg, s);
       let target = options[0];
       for (const i of options) if (challenge(cfg, s, i) < challenge(cfg, s, target)) target = i;
-      let need = cost(cfg, challenge(cfg, s, target), s.growth);
+      let c = cost(cfg, challenge(cfg, s, target), s.growth);
 
       const canRest = cfg.rest_sites > 0 && s.attrition < cfg.attrition;
       if (canRest && s.attrition < restBelow * cfg.attrition) return toward(s, REST);
 
-      if (growUntil !== null && need > growUntil * cfg.attrition && campYield(cfg, s) > 0) {
-        target = CAMP; need = cost(cfg, cfg.camp_challenge, s.growth);
+      if (campYield(cfg, s) > 0) {
+        const owed = campAfterFailure && s.failures > s.camps;
+        const wants = growUntil !== null && c > growUntil * cfg.attrition;
+        if (owed || wants) { target = CAMP; c = cost(cfg, cfg.camp_challenge, s.growth); }
       }
-      if (s.pos !== target) need += cfg.rotation_attrition;
-      if (cfg.rest_sites > 0) need += cfg.rotation_attrition;
-      if (canRest && s.attrition <= need) return toward(s, REST);
+
+      if (canRest) {
+        // From a rest site at full attrition: rotate, then the encounter.
+        const afterRest = cfg.attrition - cfg.rotation_attrition - c;
+        if (afterRest > 0) {
+          let need = c + (s.pos === target ? 0 : cfg.rotation_attrition);
+          if (afterRest > cfg.rotation_attrition) need += cfg.rotation_attrition; // keep enough to get back
+          if (s.attrition <= need) return toward(s, REST);
+        }
+      }
       return toward(s, target);
     };
     decide.archetype = name; decide.summary = summary;
@@ -259,9 +272,9 @@
   const toward = (s, target) => s.pos === target ? { kind: ENGAGE, target: null } : { kind: ROTATE, target };
 
   const ARCHETYPES = {
-    rusher: archetype("rusher", null, 0.0, "never camps; rests only to avoid failing"),
-    balanced: archetype("balanced", 0.5, 0.25, "camps until objectives cost half the pool"),
-    cautious: archetype("cautious", 0.25, 0.5, "camps until objectives are cheap; rests below half"),
+    rusher: archetype("rusher", null, 0.0, true, "always attacks; camps once after each failure"),
+    balanced: archetype("balanced", 0.5, 0.25, false, "camps until objectives cost half the pool"),
+    cautious: archetype("cautious", 0.25, 0.5, false, "camps until objectives are cheap; rests below half"),
   };
 
   const api = {

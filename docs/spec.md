@@ -152,17 +152,27 @@ also be played by hand:
 
 - **Optimal**: exhaustive search over every sequence of decisions, with
   perfect information. Shows the best outcome a configuration permits and the
-  route to it. Ranks outcomes by: win, then advancement, then time left, then
-  attrition left, then growth.
-- **Archetypes**: rule-based players representing play styles. Each is
-  defined by when it camps (until the next objective's cost falls below a
-  fraction of max attrition) and when it rests (below a fraction of max
-  attrition, or whenever the next encounter would leave too little to rotate
-  back to a rest site).
-  - Rusher: never camps; rests only to avoid failing.
-  - Balanced: camps until objectives cost half the pool.
-  - Cautious: camps until objectives cost a quarter of the pool; rests below
-    half.
+  route to it. A win ranks above any loss; wins rank by time left, then
+  attrition left, then growth. Leftover time and attrition mean nothing after
+  a loss, so losses rank by advancement, then growth, then running out of
+  time over elimination.
+- **Archetypes**: rule-based players representing play styles.
+  - Rusher: always heads for the next objective. Camps only after a failure:
+    one camp per failure, then back to the objective.
+  - Balanced: camps until the next objective costs at most half the pool;
+    rests below a quarter.
+  - Cautious: camps until the next objective costs at most a quarter of the
+    pool; rests below half.
+
+  Shared rules for all archetypes:
+  - Under free sequence, the next objective is the one with the lowest
+    current challenge.
+  - Before an encounter it cannot afford, or one that would leave too little
+    attrition to rotate back to a rest site, an archetype rests, but only if
+    resting would let the encounter succeed. If even a full pool cannot pay
+    for it, the archetype attacks anyway and accepts the failure.
+  - When camps have run out, an archetype that wants or owes a camp heads for
+    the objective instead.
 - **Interactive**: a human picks each action.
 
 The gap between optimal and archetype results indicates how much a

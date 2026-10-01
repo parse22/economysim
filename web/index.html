@@ -443,7 +443,8 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
     else if (c.growth === "diminishing") supply = `<span>Next camp <b class="num">+${E.campYield(c, s)}</b></span>`;
     else supply = `<span>Camps <b>unlimited</b></span>`;
     $("where").innerHTML = `<span>At <b>${esc(E.positionName(c, s.pos))}</b></span>
-      <span>Challenge ramp <b class="num">+${E.ramp(c, k)}</b></span>${supply}`;
+      <span>Challenge ramp <b class="num">+${E.ramp(c, k)}</b></span>${supply}
+      <span>Failures <b class="num">${s.failures}</b></span>`;
 
     $("objlist").innerHTML = c.objectives.map((o, i) => {
       const done = (s.done >> i) & 1;

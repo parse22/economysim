@@ -2,10 +2,10 @@ import unittest
 
 from economysim import game
 from economysim.model import (
-    CAMP, ENGAGE, NOWHERE, REST, ROTATE, Action, Config, Cost, Objective, Ramp,
+    CAMP, ENGAGE, NOWHERE, REST, ROTATE, Action, Config, Cost, Objective, Ramp, State,
     available_objectives, camp_yield, legal_actions, start, step,
 )
-from economysim.players import ARCHETYPES, play, solve
+from economysim.players import ARCHETYPES, play, score, solve
 
 ONE = (Objective("Only", difficulty=5, time=2, growth=1),)
 
@@ -74,6 +74,10 @@ class FullAttrition(unittest.TestCase):
     def test_cost_equal_to_pool_fails(self):
         cfg, s = self.failing()
         self.assertTrue(step(cfg, s, Action(ENGAGE)).failed)
+
+    def test_failure_is_counted(self):
+        cfg, s = self.failing(failure="delay")
+        self.assertEqual(step(cfg, s, Action(ENGAGE)).state.failures, 1)
 
     def test_elimination_ends_session(self):
         cfg, s = self.failing(failure="elimination")
@@ -149,6 +153,50 @@ class Players(unittest.TestCase):
         cfg = Config(failure="delay")
         for a in ARCHETYPES.values():
             play(cfg, a)  # step() raises on an illegal action
+
+
+class LossScoring(unittest.TestCase):
+    def test_win_beats_any_loss(self):
+        won = State(time=0, attrition=1, status="won", done=1)
+        lost = State(time=50, attrition=12, growth=99, status="lost", end="time", done=7)
+        self.assertGreater(score(won), score(lost))
+
+    def test_losses_ignore_leftover_time_and_prefer_time_over_elimination(self):
+        out_of_time = State(time=0, attrition=1, growth=5, done=3, status="lost", end="time")
+        eliminated = State(time=20, attrition=0, growth=5, done=3, status="lost", end="eliminated")
+        self.assertGreater(score(out_of_time), score(eliminated))
+
+    def test_losses_rank_advancement_first(self):
+        more = State(time=0, attrition=0, growth=0, done=7, status="lost", end="eliminated")
+        less = State(time=0, attrition=5, growth=9, done=3, status="lost", end="time")
+        self.assertGreater(score(more), score(less))
+
+
+class Rusher(unittest.TestCase):
+    def test_attacks_unbeatable_objective_under_elimination(self):
+        run = play(Config(failure="elimination"), ARCHETYPES["rusher"])
+        self.assertEqual(run.final.end, "eliminated")
+        self.assertEqual(run.count(Config(), CAMP), 0)
+
+    def test_camps_once_per_failure_under_delay(self):
+        cfg = Config(failure="delay")
+        run = play(cfg, ARCHETYPES["rusher"])
+        self.assertGreater(run.failures, 0)
+        self.assertLessEqual(run.final.camps, run.final.failures)
+        self.assertGreater(run.final.camps, 0)
+
+    def test_never_camps_without_failing(self):
+        cfg = Config(objectives=ONE, failure="delay")
+        run = play(cfg, ARCHETYPES["rusher"])
+        self.assertEqual((run.final.status, run.final.camps), ("won", 0))
+
+    def test_no_rest_loop_when_resting_cannot_help(self):
+        # The Fortress costs more than a full pool. The old rule travelled to it,
+        # turned back to rest, and repeated until time ran out.
+        for f in ("delay", "elimination"):
+            run = play(Config(failure=f), ARCHETYPES["rusher"])
+            kinds = [a.kind for a in run.actions]
+            self.assertNotIn((ROTATE, ROTATE), list(zip(kinds, kinds[1:])), f)
 
 
 class ConfigLoading(unittest.TestCase):
