@@ -46,6 +46,17 @@ A `--config` file only needs the keys it overrides, for example:
 }
 ```
 
+## Web version
+
+`web/index.html` is a phone-friendly page with three tabs: Play (the
+interactive game), Compare (all 12 configurations with step-by-step traces)
+and Settings (every parameter, plus JSON import and export).
+`web/economysim.js` is a JavaScript port of the model and players.
+`tests/test_web_parity.py` runs both versions on the same configurations and
+fails if any run differs, so change them together. To use the page locally,
+serve the `web/` folder (`python -m http.server -d web`) and open it in a
+browser.
+
 ## Players
 
 - **optimal**: exhaustive search with perfect information; the best outcome
@@ -61,4 +72,5 @@ A `--config` file only needs the keys it overrides, for example:
 | `economysim/players.py`  | Optimal search and archetypes              |
 | `economysim/game.py`     | Interactive game                           |
 | `economysim/__main__.py` | Command line                               |
-| `tests/`                 | `python -m unittest`                       |
+| `web/`                   | Web page and JavaScript port of the model  |
+| `tests/`                 | `python -m unittest` (parity test needs Node) |

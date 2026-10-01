@@ -1,0 +1,730 @@
+<title>Encounter Economy Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one narrow column (phone first) under a sticky tab bar; resources read as instrument meters. */
+:root {
+  --bg: #e9ebf1;
+  --panel: #f7f8fb;
+  --ink: #1a1f2e;
+  --muted: #5a6175;
+  --line: #d0d4de;
+  --accent: #3b47a8;
+  --accent-ink: #ffffff;
+  --time: #2b74ad;
+  --attr: #b93a34;
+  --growth: #2f7d45;
+  --adv: #9a6d17;
+  --won: #2f7d45;
+  --lost: #b93a34;
+  --warn-bg: #f8e3e1;
+  --font-display: "Cinzel", "Trajan Pro", Georgia, serif;
+  --font-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1120; --panel: #171b2d; --ink: #e5e8f2; --muted: #9aa1b9; --line: #2a3050;
+    --accent: #8f9cff; --accent-ink: #0e1120;
+    --time: #6eb2e6; --attr: #f07d74; --growth: #76c68d; --adv: #e0b55b;
+    --won: #76c68d; --lost: #f07d74; --warn-bg: #3a1d22;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1120; --panel: #171b2d; --ink: #e5e8f2; --muted: #9aa1b9; --line: #2a3050;
+  --accent: #8f9cff; --accent-ink: #0e1120;
+  --time: #6eb2e6; --attr: #f07d74; --growth: #76c68d; --adv: #e0b55b;
+  --won: #76c68d; --lost: #f07d74; --warn-bg: #3a1d22;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 16px/1.45 var(--font-body);
+  padding-inline: 16px; padding-block: 0 40px;
+}
+.wrap { max-width: 560px; margin: 0 auto; display: grid; gap: 18px; }
+h1, h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: 0.04em; text-wrap: balance; margin: 0; }
+h1 { font-size: 1.15rem; }
+h2 { font-size: 1rem; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 0.88rem; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Top bar */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--bg); margin-inline: -16px; padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.top .wrap { gap: 10px; }
+.brand { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 3px; }
+.tabs button { border: 0; background: none; padding: 8px 4px; border-radius: 7px; font-weight: 700; cursor: pointer; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+main .wrap { padding-top: 16px; }
+
+/* Segmented rule pickers */
+.rules { display: grid; gap: 10px; }
+.seg { display: grid; gap: 4px; }
+.seg-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg-opts input { position: absolute; opacity: 0; pointer-events: none; }
+.seg-opts label {
+  flex: 1 1 0; min-width: 0; text-align: center; padding: 7px 8px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel); cursor: pointer; font-weight: 600; font-size: 0.92rem;
+}
+.seg-opts input:checked + label { border-color: var(--accent); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.seg-opts input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.btn {
+  border: 1px solid var(--line); background: var(--panel); padding: 10px 14px; border-radius: var(--radius);
+  font-weight: 700; cursor: pointer;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.note { font-size: 0.88rem; color: var(--adv); font-weight: 600; }
+
+/* Status meters */
+.status { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; display: grid; gap: 12px; }
+.meter { display: grid; gap: 4px; }
+.meter-head { display: flex; justify-content: space-between; align-items: baseline; }
+.bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 4px; transition: width 0.25s ease; }
+.meter.time .bar > i { background: var(--time); }
+.meter.attr .bar > i { background: var(--attr); }
+.meter.time .value { color: var(--time); }
+.meter.attr .value { color: var(--attr); }
+.value { font-family: var(--font-data); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stat .value.growth { color: var(--growth); font-size: 1.3rem; }
+.pips { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+.pip { width: 18px; height: 18px; border-radius: 4px; border: 2px solid var(--adv); }
+.pip.done { background: var(--adv); }
+.where { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.92rem; border-top: 1px solid var(--line); padding-top: 10px; }
+.where b { font-weight: 700; }
+
+/* Actions */
+.actions { display: grid; gap: 8px; }
+.act {
+  display: grid; gap: 6px; text-align: left; width: 100%; padding: 12px 14px; border-radius: var(--radius);
+  border: 1px solid var(--line); background: var(--panel); cursor: pointer;
+}
+.act:hover { border-color: var(--accent); }
+.act .title { font-weight: 700; font-size: 1.02rem; }
+.act .sub { font-size: 0.86rem; color: var(--muted); }
+.act.risky { border-color: var(--lost); background: var(--warn-bg); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-family: var(--font-data); font-size: 0.78rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; border: 1px solid currentColor; }
+.chip.time { color: var(--time); }
+.chip.attr { color: var(--attr); }
+.chip.growth { color: var(--growth); }
+.chip.adv { color: var(--adv); }
+.chip.warn { color: var(--lost); background: var(--panel); }
+
+.banner { border-radius: var(--radius); padding: 14px; display: grid; gap: 10px; border: 2px solid; }
+.banner.won { border-color: var(--won); }
+.banner.lost { border-color: var(--lost); }
+.banner h2 { font-size: 1.2rem; }
+.banner.won h2 { color: var(--won); }
+.banner.lost h2 { color: var(--lost); }
+
+/* Log */
+.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; font-size: 0.9rem; }
+.log li { display: grid; grid-template-columns: 2.2em 1fr; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); }
+.log li .n { color: var(--muted); font-family: var(--font-data); font-size: 0.8rem; padding-top: 2px; }
+.log li.fail .msg { color: var(--lost); font-weight: 600; }
+.log .after { display: block; color: var(--muted); font-family: var(--font-data); font-size: 0.76rem; }
+
+details { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; }
+summary { cursor: pointer; font-weight: 700; }
+.objlist { display: grid; gap: 4px; margin-top: 8px; font-size: 0.9rem; }
+.objlist div { display: flex; justify-content: space-between; gap: 10px; }
+.objlist .done { color: var(--muted); text-decoration: line-through; }
+
+/* Compare */
+.cards { display: grid; gap: 10px; }
+.card {
+  display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--panel); text-align: left; width: 100%; cursor: pointer;
+}
+.card[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.card .head { font-weight: 700; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.result { font-family: var(--font-data); font-size: 0.82rem; font-weight: 700; }
+.result.won { color: var(--won); }
+.result.lost { color: var(--lost); }
+.arch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.arch div { font-size: 0.78rem; border-top: 1px solid var(--line); padding-top: 4px; min-width: 0; }
+.arch .result { display: block; overflow-wrap: anywhere; }
+.trace { scroll-margin-top: 130px; display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius); padding: 14px; }
+.trace ol { margin: 0; padding: 0; list-style: none; display: grid; font-size: 0.86rem; }
+.trace li { padding: 6px 0; border-top: 1px solid var(--line); display: grid; gap: 2px; }
+.trace li.fail { color: var(--lost); font-weight: 600; }
+.trace li .after { color: var(--muted); font-family: var(--font-data); font-size: 0.74rem; font-weight: 500; }
+.progress { font-family: var(--font-data); font-size: 0.85rem; color: var(--muted); }
+.legend { display: grid; gap: 2px; font-size: 0.86rem; color: var(--muted); }
+.error { color: var(--lost); font-weight: 600; font-size: 0.9rem; }
+
+/* Settings */
+.group { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.field { display: grid; gap: 3px; min-width: 0; }
+.field label { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+.field input, .field select, textarea {
+  width: 100%; min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg);
+}
+.field.check { grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
+.field.check input { width: 20px; height: 20px; }
+.objrow { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) auto; gap: 6px; align-items: end; }
+.objrow input { width: 100%; min-width: 0; padding: 6px 7px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); }
+.objrow .ctl { display: flex; gap: 2px; }
+.objrow .ctl button { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; width: 28px; height: 32px; cursor: pointer; padding: 0; }
+.objhead { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) 90px; gap: 6px; font-size: 0.72rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px; resize: vertical; }
+
+@media (max-width: 380px) {
+  .fields { grid-template-columns: 1fr; }
+  .objhead { display: none; }
+  .objrow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .objrow .name { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <h1>Encounter Economy Lab</h1>
+      <span class="muted small" id="rules-label"></span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" id="tab-btn-play" data-tab="play" aria-selected="true">Play</button>
+      <button role="tab" id="tab-btn-compare" data-tab="compare" aria-selected="false">Compare</button>
+      <button role="tab" id="tab-btn-settings" data-tab="settings" aria-selected="false">Settings</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- PLAY -->
+  <section id="tab-play" class="wrap" role="tabpanel">
+    <div class="rules" id="rules"></div>
+    <div class="row">
+      <button class="btn primary" id="new-session">New session</button>
+      <span class="note" id="rules-note" hidden>New rules apply when you start a new session.</span>
+    </div>
+
+    <div class="status" aria-live="polite">
+      <div class="meter time">
+        <div class="meter-head"><span class="label">Time</span><span class="value" id="v-time"></span></div>
+        <div class="bar"><i id="b-time"></i></div>
+      </div>
+      <div class="meter attr">
+        <div class="meter-head"><span class="label">Attrition</span><span class="value" id="v-attr"></span></div>
+        <div class="bar"><i id="b-attr"></i></div>
+      </div>
+      <div class="pair">
+        <div class="stat"><span class="label">Growth</span><div class="value growth" id="v-growth"></div></div>
+        <div class="stat"><span class="label">Advancement</span><div class="pips" id="v-adv"></div></div>
+      </div>
+      <div class="where" id="where"></div>
+    </div>
+
+    <div id="end" hidden></div>
+    <div class="actions" id="actions"></div>
+
+    <details id="obj-details">
+      <summary>Objectives</summary>
+      <div class="objlist" id="objlist"></div>
+    </details>
+
+    <div>
+      <span class="label">Session log</span>
+      <ol class="log" id="log"></ol>
+    </div>
+  </section>
+
+  <!-- COMPARE -->
+  <section id="tab-compare" class="wrap" role="tabpanel" hidden>
+    <p class="muted small">All 12 fundamental configurations with your current parameters. Optimal play is an exhaustive search with perfect information; the archetypes follow simple rules. Tap a configuration to trace a run step by step.</p>
+    <div class="row">
+      <button class="btn primary" id="run-compare">Run comparison</button>
+      <span class="progress" id="compare-progress"></span>
+    </div>
+    <p class="error" id="compare-error" hidden></p>
+    <div id="trace" class="trace" hidden></div>
+    <div class="cards" id="cards"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" class="wrap" role="tabpanel" hidden>
+    <p class="muted small">Parameters for every session and comparison. Changes save on this device. The objective order is the order used under fixed sequence.</p>
+    <p class="error" id="settings-error" hidden></p>
+    <div id="groups"></div>
+    <div class="group">
+      <h2>Objectives</h2>
+      <div class="objhead"><span>Name</span><span>Difficulty</span><span>Time</span><span>Growth</span><span></span></div>
+      <div id="objrows" style="display:grid;gap:8px"></div>
+      <div class="row"><button class="btn" id="add-obj">Add objective</button></div>
+    </div>
+    <div class="group">
+      <h2>Configuration JSON</h2>
+      <p class="muted small">Matches <span class="num">python -m economysim config</span>. Copy it out, or paste a configuration and apply it.</p>
+      <textarea id="json" spellcheck="false" aria-label="Configuration JSON"></textarea>
+      <div class="row">
+        <button class="btn" id="copy-json">Copy</button>
+        <button class="btn" id="apply-json">Apply pasted JSON</button>
+        <button class="btn" id="reset">Reset to defaults</button>
+        <span class="muted small" id="json-status"></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="economysim.js"></script>
+<script>
+(function () {
+  "use strict";
+  const E = window.EconomySim;
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const cap = s => s[0].toUpperCase() + s.slice(1);
+  const STORE = "econ-lab:v1";
+
+  // ---- App state ----
+  let cfg;            // parameters + chosen fundamentals for the next session
+  let session;        // { cfg, history: [actions], states: [state], steps: [step] }
+  let tab = "play";
+  let compare = null; // { key, rows }
+  let traceSel = null;
+
+  function save() {
+    try { localStorage.setItem(STORE, JSON.stringify({ cfg, tab })); } catch (e) { /* storage unavailable */ }
+  }
+  function load() {
+    try { return JSON.parse(localStorage.getItem(STORE) || "null"); } catch (e) { return null; }
+  }
+
+  // ---- Play ----
+  const RULES = [
+    ["failure", "Full attrition", E.FAILURE_MODES],
+    ["sequence", "Sequence", E.SEQUENCE_MODES],
+    ["growth", "Growth", E.GROWTH_MODES],
+  ];
+
+  function renderRules() {
+    $("rules").innerHTML = RULES.map(([key, title, modes]) => `
+      <div class="seg" role="radiogroup" aria-label="${title}">
+        <span class="label">${title}</span>
+        <div class="seg-opts">${modes.map(m => `
+          <input type="radio" name="r-${key}" id="r-${key}-${m}" value="${m}" ${cfg[key] === m ? "checked" : ""}>
+          <label for="r-${key}-${m}">${cap(m)}</label>`).join("")}
+        </div>
+      </div>`).join("");
+    $("rules").querySelectorAll("input").forEach(inp => inp.addEventListener("change", () => {
+      cfg[inp.name.slice(2)] = inp.value;
+      save();
+      if (!session.history.length) newSession(); else renderPlay();
+    }));
+  }
+
+  function newSession(history = []) {
+    const c = JSON.parse(JSON.stringify(cfg));
+    session = { cfg: c, history: [], states: [E.start(c)], steps: [] };
+    for (const a of history) act(a, false);
+    renderPlay();
+  }
+
+  function act(a, render = true) {
+    const s = session.states[session.states.length - 1];
+    const st = E.step(session.cfg, s, a);
+    session.history.push(a); session.steps.push(st); session.states.push(st.state);
+    if (render) renderPlay();
+  }
+
+  function actionView(c, s, a) {
+    const [t, cost] = E.actionCosts(c, s, a);
+    const chips = [`<span class="chip time">−${t} time</span>`];
+    if (cost) chips.push(`<span class="chip attr">−${cost} attrition</span>`);
+    let title, sub = "";
+    if (a.kind === E.ROTATE) {
+      if (a.target >= 0) {
+        const o = c.objectives[a.target], ch = E.challenge(c, s, a.target);
+        title = `Travel to ${o.name}`;
+        sub = `Objective · challenge ${ch} · taking it costs ${E.cost(c, ch, s.growth)} attrition at your growth`;
+      } else if (a.target === E.CAMP) {
+        title = "Travel to a camp";
+        sub = `Camp yields +${E.campYield(c, s)} growth · costs ${E.cost(c, c.camp_challenge, s.growth)} attrition at your growth`;
+      } else {
+        title = "Travel to a rest site";
+        sub = `Rest restores up to ${c.rest_restore} attrition`;
+      }
+    } else if (s.pos === E.CAMP) {
+      title = "Camp"; chips.push(`<span class="chip growth">+${E.campYield(c, s)} growth</span>`);
+    } else if (s.pos === E.REST) {
+      title = "Rest"; chips.push(`<span class="chip attr">+${Math.min(c.rest_restore, c.attrition - s.attrition)} attrition</span>`);
+    } else {
+      const o = c.objectives[s.pos];
+      title = `Take ${o.name}`;
+      chips.push(`<span class="chip growth">+${o.growth} growth</span>`, `<span class="chip adv">+1 advancement</span>`);
+    }
+    let risky = false;
+    if (t > s.time) { chips.push(`<span class="chip warn">Runs out of time</span>`); risky = true; }
+    else if (cost && cost >= s.attrition) {
+      chips.push(`<span class="chip warn">Fails: full attrition</span>`); risky = true;
+    }
+    return { title, sub, chips: chips.join(""), risky };
+  }
+
+  function renderPlay() {
+    const c = session.cfg, s = session.states[session.states.length - 1];
+    const pending = ["failure", "sequence", "growth"].some(k => cfg[k] !== c[k]) || JSON.stringify(cfg) !== JSON.stringify(c);
+    $("rules-note").hidden = !pending || !session.history.length;
+    $("rules-label").textContent = `${cap(c.failure)} · ${cap(c.sequence)} · ${cap(c.growth)}`;
+
+    $("v-time").textContent = `${s.time} / ${c.time}`;
+    $("b-time").style.width = `${100 * s.time / c.time}%`;
+    $("v-attr").textContent = `${s.attrition} / ${c.attrition}`;
+    $("b-attr").style.width = `${100 * s.attrition / c.attrition}%`;
+    $("v-growth").textContent = s.growth;
+    $("v-adv").innerHTML = c.objectives.map((o, i) =>
+      `<span class="pip ${(s.done >> i) & 1 ? "done" : ""}" title="${esc(o.name)}"></span>`).join("") +
+      `<span class="num small" style="margin-left:4px">${E.advancement(s)}/${c.objectives.length}</span>`;
+
+    const k = E.advancement(s);
+    let supply = "";
+    if (c.growth === "finite") supply = `<span>Camps left <b class="num">${Math.max(0, c.camp_count - s.camps)}</b></span>`;
+    else if (c.growth === "diminishing") supply = `<span>Next camp <b class="num">+${E.campYield(c, s)}</b></span>`;
+    else supply = `<span>Camps <b>unlimited</b></span>`;
+    $("where").innerHTML = `<span>At <b>${esc(E.positionName(c, s.pos))}</b></span>
+      <span>Challenge ramp <b class="num">+${E.ramp(c, k)}</b></span>${supply}`;
+
+    $("objlist").innerHTML = c.objectives.map((o, i) => {
+      const done = (s.done >> i) & 1;
+      return `<div class="${done ? "done" : ""}"><span>${esc(o.name)}</span><span class="num small">${done ? "done" :
+        `challenge ${o.difficulty + E.ramp(c, k)} · time ${o.time} · +${o.growth}`}</span></div>`;
+    }).join("");
+
+    const actions = E.legalActions(c, s);
+    $("actions").innerHTML = actions.map((a, i) => {
+      const v = actionView(c, s, a);
+      return `<button class="act ${v.risky ? "risky" : ""}" data-i="${i}">
+        <span class="title">${esc(v.title)}</span>${v.sub ? `<span class="sub">${esc(v.sub)}</span>` : ""}
+        <span class="chips">${v.chips}</span></button>`;
+    }).join("");
+    $("actions").querySelectorAll(".act").forEach(b => b.addEventListener("click", () => act(actions[+b.dataset.i])));
+
+    const endEl = $("end");
+    if (s.status !== "active") {
+      const won = s.status === "won";
+      const fails = session.steps.filter(x => x.failed).length;
+      endEl.className = `banner ${s.status}`;
+      endEl.innerHTML = `<h2>${won ? "Session won" : "Session lost"}</h2>
+        <p>${won ? `All objectives complete with ${s.time} time left.` : `Ended by ${esc(endReason(s.end))}.`}
+          ${session.history.length} turns, ${fails} failed encounter${fails === 1 ? "" : "s"}, growth ${s.growth}.</p>
+        <div class="row"><button class="btn primary" id="again">Play again</button>
+        <button class="btn" id="vs-opt">Compare with optimal</button></div>`;
+      endEl.hidden = false;
+      $("again").onclick = () => newSession();
+      $("vs-opt").onclick = () => { setTab("compare"); showTrace(c, "optimal"); };
+    } else endEl.hidden = true;
+
+    $("log").innerHTML = session.steps.map((st, i) => `
+      <li class="${st.failed ? "fail" : ""}"><span class="n">${i + 1}</span>
+      <span><span class="msg">${esc(st.message)}</span>
+      <span class="after">time ${st.state.time} · attrition ${st.state.attrition} · growth ${st.state.growth}</span></span></li>`
+    ).reverse().join("");
+  }
+
+  const endReason = e => ({ time: "running out of time", eliminated: "elimination", "objective lost": "losing an objective" })[e] || e;
+
+  // ---- Compare ----
+  function outcome(c, run) {
+    const s = run.final;
+    if (s.status === "won") return { cls: "won", text: `Won · ${s.time} left` };
+    return { cls: "lost", text: `Lost (${s.end}) · ${E.advancement(s)}/${c.objectives.length}` };
+  }
+
+  function configsFor(base) {
+    const out = [];
+    for (const f of E.FAILURE_MODES) for (const q of E.SEQUENCE_MODES) for (const g of E.GROWTH_MODES)
+      out.push(E.withFundamentals(base, f, q, g));
+    return out;
+  }
+
+  function runCompare() {
+    const base = JSON.parse(JSON.stringify(cfg));
+    const key = JSON.stringify(Object.assign({}, base, { failure: 0, sequence: 0, growth: 0 }));
+    const configs = configsFor(base);
+    const rows = [];
+    $("run-compare").disabled = true;
+    $("compare-error").hidden = true;
+    traceSel = null; $("trace").hidden = true;
+    let i = 0;
+    const next = () => {
+      if (i === configs.length) {
+        compare = { key, rows };
+        $("run-compare").disabled = false;
+        $("compare-progress").textContent = "";
+        renderCompare();
+        return;
+      }
+      $("compare-progress").textContent = `Solving ${i + 1} of ${configs.length}…`;
+      setTimeout(() => {
+        const c = configs[i];
+        try {
+          const runs = { optimal: E.solve(c) };
+          for (const [n, a] of Object.entries(E.ARCHETYPES)) runs[n] = E.play(c, a);
+          rows.push({ c, runs });
+        } catch (err) {
+          $("compare-error").textContent = err.message;
+          $("compare-error").hidden = false;
+          $("run-compare").disabled = false;
+          $("compare-progress").textContent = "";
+          return;
+        }
+        i++;
+        renderCompare(rows);
+        next();
+      }, 16);
+    };
+    next();
+  }
+
+  function renderCompare(partial) {
+    const rows = partial || (compare && compare.rows) || [];
+    const stale = compare && !partial && compare.key !== JSON.stringify(Object.assign({}, cfg, { failure: 0, sequence: 0, growth: 0 }));
+    $("cards").innerHTML = (stale ? `<p class="note">Settings changed since this comparison. Run it again to update.</p>` : "") +
+      rows.map((r, idx) => {
+        const o = outcome(r.c, r.runs.optimal), opt = r.runs.optimal;
+        const sel = traceSel && traceSel.idx === idx;
+        return `<button class="card" data-idx="${idx}" aria-pressed="${sel ? "true" : "false"}">
+          <span class="head"><span>${cap(r.c.failure)} · ${cap(r.c.sequence)} · ${cap(r.c.growth)}</span>
+          <span class="result ${o.cls}">${o.text}</span></span>
+          <span class="small muted">Optimal: ${E.countEngaged(r.c, opt, E.CAMP)} camps · ${E.countEngaged(r.c, opt, E.REST)} rests ·
+            ${E.failures(opt)} failures · growth ${opt.final.growth}</span>
+          <span class="arch">${Object.keys(E.ARCHETYPES).map(n => {
+            const a = outcome(r.c, r.runs[n]);
+            return `<div><span class="label">${n}</span><span class="result ${a.cls}">${a.text}</span></div>`;
+          }).join("")}</span></button>`;
+      }).join("");
+    $("cards").querySelectorAll(".card").forEach(b => b.addEventListener("click", () => {
+      const r = rows[+b.dataset.idx];
+      showTrace(r.c, (traceSel && traceSel.player) || "optimal", +b.dataset.idx, r.runs);
+    }));
+    $("legend").innerHTML = Object.entries(E.ARCHETYPES).map(([n, a]) => `<span><b>${cap(n)}</b>: ${a.summary}</span>`).join("");
+  }
+
+  function showTrace(c, player, idx = null, runs = null) {
+    if (!runs) {
+      runs = {};
+      try { runs[player] = player === "optimal" ? E.solve(c) : E.play(c, E.ARCHETYPES[player]); }
+      catch (err) { $("compare-error").textContent = err.message; $("compare-error").hidden = false; return; }
+    }
+    const run = runs[player] || (runs[player] = player === "optimal" ? E.solve(c) : E.play(c, E.ARCHETYPES[player]));
+    traceSel = { idx, player };
+    const players = ["optimal", ...Object.keys(E.ARCHETYPES)];
+    const o = outcome(c, run);
+    $("trace").innerHTML = `
+      <div class="row" style="justify-content:space-between">
+        <h2>${cap(c.failure)} · ${cap(c.sequence)} · ${cap(c.growth)}</h2>
+        <button class="btn" id="close-trace">Close</button>
+      </div>
+      <div class="seg-opts" role="radiogroup" aria-label="Player">${players.map(p => `
+        <input type="radio" name="trace-player" id="tp-${p}" value="${p}" ${p === player ? "checked" : ""}>
+        <label for="tp-${p}">${cap(p)}</label>`).join("")}</div>
+      <p class="result ${o.cls}">${o.text} · ${E.countEngaged(c, run, E.CAMP)} camps · ${E.countEngaged(c, run, E.REST)} rests · ${E.failures(run)} failures</p>
+      <ol>${run.steps.map((st, i) => `<li class="${st.failed ? "fail" : ""}"><span>${i + 1}. ${esc(st.message)}</span>
+        <span class="after">time ${st.state.time} · attrition ${st.state.attrition} · growth ${st.state.growth} · adv ${E.advancement(st.state)}</span></li>`).join("")}</ol>`;
+    $("trace").hidden = false;
+    $("trace").querySelectorAll("input[name=trace-player]").forEach(inp =>
+      inp.addEventListener("change", () => showTrace(c, inp.value, idx, runs)));
+    $("close-trace").onclick = () => { traceSel = null; $("trace").hidden = true; renderCompare(); };
+    renderCompare();
+    $("trace").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // ---- Settings ----
+  const GROUPS = [
+    ["Session", [["time", "Time budget"], ["attrition", "Attrition pool"]]],
+    ["Camp", [["camp_time", "Time"], ["camp_challenge", "Challenge"], ["camp_yield", "Growth yield"],
+              ["camp_count", "Camps (finite)"], ["camp_decay", "Decay per camp (diminishing)"]]],
+    ["Rest", [["rest_time", "Time"], ["rest_restore", "Attrition restored"], ["rest_sites", "Rest sites"]]],
+    ["Rotation", [["rotation_time", "Time"], ["rotation_attrition", "Attrition"]]],
+    ["Challenge ramp", [["ramp.kind", "Shape", ["linear", "table"]], ["ramp.rate", "Rate per objective (linear)"],
+                        ["ramp.table", "Table, comma separated"]]],
+    ["Attrition cost", [["cost.floor", "Minimum cost"], ["cost.scale", "Scale", null, "0.1"]]],
+    ["Delay (when full attrition is delay)", [["delay_time", "Time lost"], ["delay_recover", "Attrition after recovery"],
+      ["delay_growth_loss", "Growth lost"], ["delay_retry", "Failed encounter can be retried", "bool"],
+      ["delay_relocate", "Recovery forces a rotation", "bool"]]],
+  ];
+
+  const getPath = (o, p) => p.split(".").reduce((x, k) => x[k], o);
+  function setPath(o, p, v) { const ks = p.split("."); const last = ks.pop(); ks.reduce((x, k) => x[k], o)[last] = v; }
+
+  function renderSettings() {
+    $("groups").innerHTML = GROUPS.map(([title, fields]) => `
+      <div class="group" style="margin-bottom:12px"><h2>${title}</h2><div class="fields">${fields.map(([path, label, kind, stepv]) => {
+        const id = "s-" + path.replace(".", "-"), v = getPath(cfg, path);
+        if (kind === "bool") return `<div class="field check"><input type="checkbox" id="${id}" data-path="${path}" data-kind="bool" ${v ? "checked" : ""}><label for="${id}">${label}</label></div>`;
+        if (Array.isArray(kind)) return `<div class="field"><label for="${id}">${label}</label><select id="${id}" data-path="${path}" data-kind="str">${kind.map(k => `<option ${k === v ? "selected" : ""}>${k}</option>`).join("")}</select></div>`;
+        if (path === "ramp.table") return `<div class="field"><label for="${id}">${label}</label><input id="${id}" data-path="${path}" data-kind="list" value="${v.join(", ")}" inputmode="numeric"></div>`;
+        return `<div class="field"><label for="${id}">${label}</label><input type="number" id="${id}" data-path="${path}" data-kind="${stepv ? "float" : "int"}" step="${stepv || 1}" value="${v}" inputmode="${stepv ? "decimal" : "numeric"}"></div>`;
+      }).join("")}</div></div>`).join("");
+    $("groups").querySelectorAll("[data-path]").forEach(el => el.addEventListener("change", onField));
+    renderObjectives();
+    $("json").value = JSON.stringify(cfg, null, 2);
+  }
+
+  function onField(e) {
+    const el = e.target, next = JSON.parse(JSON.stringify(cfg));
+    let v;
+    switch (el.dataset.kind) {
+      case "bool": v = el.checked; break;
+      case "str": v = el.value; break;
+      case "float": v = parseFloat(el.value); break;
+      case "list": v = el.value.split(",").map(x => x.trim()).filter(Boolean).map(Number); break;
+      default: v = parseInt(el.value, 10);
+    }
+    setPath(next, el.dataset.path, v);
+    commit(next);
+  }
+
+  function renderObjectives() {
+    $("objrows").innerHTML = cfg.objectives.map((o, i) => `
+      <div class="objrow" data-i="${i}">
+        <input class="name" id="o-${i}-name" aria-label="Objective ${i + 1} name" value="${esc(o.name)}" data-k="name">
+        <input type="number" id="o-${i}-difficulty" aria-label="Difficulty" value="${o.difficulty}" data-k="difficulty" inputmode="numeric">
+        <input type="number" id="o-${i}-time" aria-label="Time" value="${o.time}" data-k="time" inputmode="numeric">
+        <input type="number" id="o-${i}-growth" aria-label="Growth" value="${o.growth}" data-k="growth" inputmode="numeric">
+        <span class="ctl"><button data-op="up" aria-label="Move up">↑</button><button data-op="down" aria-label="Move down">↓</button><button data-op="del" aria-label="Remove">×</button></span>
+      </div>`).join("");
+    $("objrows").querySelectorAll(".objrow").forEach(row => {
+      const i = +row.dataset.i;
+      row.querySelectorAll("input").forEach(inp => inp.addEventListener("change", () => {
+        const next = JSON.parse(JSON.stringify(cfg)), k = inp.dataset.k;
+        next.objectives[i][k] = k === "name" ? inp.value : parseInt(inp.value, 10);
+        commit(next);
+      }));
+      row.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+        const next = JSON.parse(JSON.stringify(cfg)), objs = next.objectives;
+        if (b.dataset.op === "del") objs.splice(i, 1);
+        if (b.dataset.op === "up" && i > 0) [objs[i - 1], objs[i]] = [objs[i], objs[i - 1]];
+        if (b.dataset.op === "down" && i < objs.length - 1) [objs[i + 1], objs[i]] = [objs[i], objs[i + 1]];
+        commit(next, true);
+      }));
+    });
+  }
+
+  function checkConfig(next) {
+    const ints = ["time", "attrition", "camp_time", "camp_challenge", "camp_yield", "camp_count", "camp_decay", "rest_time",
+      "rest_restore", "rest_sites", "rotation_time", "rotation_attrition", "delay_time", "delay_recover", "delay_growth_loss"];
+    for (const k of ints) if (!Number.isInteger(next[k]) || next[k] < 0) throw new Error(`${k} must be a whole number of 0 or more`);
+    if (!Number.isInteger(next.ramp.rate)) throw new Error("ramp rate must be a whole number");
+    if (next.ramp.table.some(x => !Number.isInteger(x))) throw new Error("ramp table must be whole numbers");
+    if (next.ramp.kind === "table" && !next.ramp.table.length) throw new Error("a table ramp needs at least one value");
+    if (!Number.isInteger(next.cost.floor) || !Number.isFinite(next.cost.scale)) throw new Error("cost floor and scale must be numbers");
+    if (next.objectives.length > 8) throw new Error("use 8 objectives or fewer so the search stays fast");
+    if (next.time > 250) throw new Error("keep the time budget at 250 or less so the search stays fast");
+    for (const o of next.objectives) {
+      if (!String(o.name).trim()) throw new Error("every objective needs a name");
+      for (const k of ["difficulty", "time", "growth"]) if (!Number.isInteger(o[k])) throw new Error(`${o.name}: ${k} must be a whole number`);
+    }
+    if (next.attrition < 1) throw new Error("attrition pool must be at least 1");
+    E.validate(next);
+  }
+
+  function commit(next, rerender = false) {
+    try { checkConfig(next); }
+    catch (err) {
+      $("settings-error").textContent = `Not saved: ${err.message}.`;
+      $("settings-error").hidden = false;
+      return false;
+    }
+    $("settings-error").hidden = true;
+    cfg = next; save();
+    if (rerender) renderSettings(); else $("json").value = JSON.stringify(cfg, null, 2);
+    renderRules();
+    if (!session.history.length) newSession(); else renderPlay();
+    return true;
+  }
+
+  // ---- Tabs ----
+  function setTab(t) {
+    tab = t; save();
+    for (const name of ["play", "compare", "settings"]) {
+      $("tab-" + name).hidden = name !== t;
+      $("tab-btn-" + name).setAttribute("aria-selected", String(name === t));
+    }
+    if (t === "compare") {
+      if (!compare) runCompare(); else renderCompare();
+    }
+    window.scrollTo(0, 0);
+  }
+
+  // ---- Boot ----
+  function boot(data) {
+    const stored = load();
+    cfg = E.defaultConfig();
+    const candidate = (data && data.cfg) || (stored && stored.cfg);
+    if (candidate) {
+      try { checkConfig(candidate); cfg = candidate; } catch (e) { /* keep defaults */ }
+    }
+    renderRules();
+    renderSettings();
+    try { newSession((data && data.history) || []); } catch (e) { newSession(); }
+
+    document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+    $("new-session").addEventListener("click", () => newSession());
+    $("run-compare").addEventListener("click", runCompare);
+    $("add-obj").addEventListener("click", () => {
+      const next = JSON.parse(JSON.stringify(cfg));
+      next.objectives.push({ name: `Objective ${next.objectives.length + 1}`, difficulty: 8, time: 3, growth: 1 });
+      commit(next, true);
+    });
+    $("copy-json").addEventListener("click", () => {
+      const text = $("json").value;
+      const fallback = () => { $("json").select(); $("json-status").textContent = "Selected; copy it from the menu."; };
+      try {
+        navigator.clipboard.writeText(text).then(() => { $("json-status").textContent = "Copied."; }, fallback);
+      } catch (e) { fallback(); }
+    });
+    $("apply-json").addEventListener("click", () => {
+      let parsed;
+      try { parsed = JSON.parse($("json").value); }
+      catch (e) { $("json-status").textContent = "That is not valid JSON."; return; }
+      const next = Object.assign(E.defaultConfig(), parsed);
+      next.ramp = Object.assign(E.defaultConfig().ramp, parsed.ramp || {});
+      next.cost = Object.assign(E.defaultConfig().cost, parsed.cost || {});
+      if (commit(next, true)) $("json-status").textContent = "Applied.";
+    });
+    let armed = false;
+    $("reset").addEventListener("click", () => {
+      if (!armed) {
+        armed = true; $("reset").textContent = "Tap again to reset";
+        setTimeout(() => { armed = false; $("reset").textContent = "Reset to defaults"; }, 3000);
+        return;
+      }
+      armed = false; $("reset").textContent = "Reset to defaults";
+      const next = E.defaultConfig();
+      for (const k of ["failure", "sequence", "growth"]) next[k] = cfg[k];
+      if (commit(next, true)) $("json-status").textContent = "Defaults restored.";
+    });
+
+    setTab((data && data.tab) || (stored && stored.tab) || "play");
+  }
+
+  window.claude?.hot?.snapshot?.(() => ({ cfg, tab, history: session ? session.history : [] }));
+  window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
+})();
+</script>
