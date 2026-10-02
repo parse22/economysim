@@ -214,6 +214,13 @@ summary { cursor: pointer; font-weight: 700; }
 .objrow .ctl { display: flex; gap: 2px; }
 .objrow .ctl button { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; width: 28px; height: 32px; cursor: pointer; padding: 0; }
 .objhead { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) 90px; gap: 6px; font-size: 0.72rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.group > *, .panel > * { min-width: 0; }
+.subhead { font-family: var(--font-body); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 6px 0 0; }
+.gap-table { border-collapse: collapse; font-family: var(--font-data); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.gap-table th, .gap-table td { padding: 4px 7px; text-align: right; border-top: 1px solid var(--line); white-space: nowrap; }
+.gap-table thead th { color: var(--muted); border-top: 0; }
+.gap-table th[scope="row"] { text-align: left; font-family: var(--font-body); font-weight: 600; color: var(--muted); }
+.wall { color: var(--lost); font-weight: 700; }
 textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px; resize: vertical; }
 
 @media (max-width: 380px) {
@@ -618,7 +625,25 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
                         ["ramp.table", "Table, comma separated"]]],
     ["Camp challenge scaling", [["camp_ramp.kind", "Shape", ["none", "linear", "table"]], ["camp_ramp.rate", "Rate per objective (linear)"],
                         ["camp_ramp.table", "Table, comma separated"]]],
-    ["Attrition cost", [["cost.floor", "Minimum cost"], ["cost.scale", "Scale", null, "0.1"]]],
+    ["Growth vs challenge", [
+      { sub: "Attrition cost (objectives and camps)" },
+      ["cost.kind", "Shape", ["linear", "curve"]],
+      ["cost.floor", "Minimum attrition cost"],
+      ["cost.scale", "Attrition per point of gap", null, "0.1", c => c.cost.kind === "linear"],
+      ["cost.base", "Attrition at an even match (gap 0)", null, "0.1", c => c.cost.kind === "curve"],
+      ["cost.under", "Underleveled: cost × per point of gap", null, "0.05", c => c.cost.kind === "curve"],
+      ["cost.over", "Overleveled: share of cost above minimum kept per point", null, "0.05", c => c.cost.kind === "curve"],
+      { sub: "Objective time" },
+      ["objective_time_scaling.kind", "Shape", ["none", "curve"]],
+      ["objective_time_scaling.under", "Underleveled: time × per point of gap", null, "0.05", c => c.objective_time_scaling.kind === "curve"],
+      ["objective_time_scaling.over", "Overleveled: share of time saving left per point", null, "0.05", c => c.objective_time_scaling.kind === "curve"],
+      ["objective_time_scaling.fastest", "Fastest time multiplier", null, "0.05", c => c.objective_time_scaling.kind === "curve"],
+      { sub: "Camp time" },
+      ["camp_time_scaling.kind", "Shape", ["none", "curve"]],
+      ["camp_time_scaling.under", "Underleveled: time × per point of gap", null, "0.05", c => c.camp_time_scaling.kind === "curve"],
+      ["camp_time_scaling.over", "Overleveled: share of time saving left per point", null, "0.05", c => c.camp_time_scaling.kind === "curve"],
+      ["camp_time_scaling.fastest", "Fastest time multiplier", null, "0.05", c => c.camp_time_scaling.kind === "curve"],
+    ], { intro: "The gap is an encounter's challenge minus your growth. A positive gap means you are underleveled; a negative gap means overleveled. These settings turn the gap into attrition and time costs. Linear attrition subtracts growth one for one. A curve rises steeply when underleveled and gives diminishing returns when overleveled.", preview: true }],
     ["Delay (when full attrition is delay)", [["delay_time", "Time lost"], ["delay_recover", "Attrition after recovery"],
       ["delay_growth_loss", "Growth lost"], ["delay_retry", "Failed encounter can be retried", "bool"],
       ["delay_relocate", "Recovery forces a rotation", "bool"]]],
@@ -627,18 +652,54 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
   const getPath = (o, p) => p.split(".").reduce((x, k) => x[k], o);
   function setPath(o, p, v) { const ks = p.split("."); const last = ks.pop(); ks.reduce((x, k) => x[k], o)[last] = v; }
 
+  function fieldHTML([path, label, kind, stepv]) {
+    const id = "s-" + path.replace(".", "-"), v = getPath(cfg, path);
+    if (kind === "bool") return `<div class="field check"><input type="checkbox" id="${id}" data-path="${path}" data-kind="bool" ${v ? "checked" : ""}><label for="${id}">${label}</label></div>`;
+    if (Array.isArray(kind)) return `<div class="field"><label for="${id}">${label}</label><select id="${id}" data-path="${path}" data-kind="str">${kind.map(k => `<option ${k === v ? "selected" : ""}>${k}</option>`).join("")}</select></div>`;
+    if (path.endsWith(".table")) return `<div class="field"><label for="${id}">${label}</label><input id="${id}" data-path="${path}" data-kind="list" value="${v.join(", ")}" inputmode="numeric"></div>`;
+    return `<div class="field"><label for="${id}">${label}</label><input type="number" id="${id}" data-path="${path}" data-kind="${stepv ? "float" : "int"}" step="${stepv || 1}" value="${v}" inputmode="${stepv ? "decimal" : "numeric"}"></div>`;
+  }
+
   function renderSettings() {
-    $("groups").innerHTML = GROUPS.map(([title, fields]) => `
-      <div class="group" style="margin-bottom:12px"><h2>${title}</h2><div class="fields">${fields.map(([path, label, kind, stepv]) => {
-        const id = "s-" + path.replace(".", "-"), v = getPath(cfg, path);
-        if (kind === "bool") return `<div class="field check"><input type="checkbox" id="${id}" data-path="${path}" data-kind="bool" ${v ? "checked" : ""}><label for="${id}">${label}</label></div>`;
-        if (Array.isArray(kind)) return `<div class="field"><label for="${id}">${label}</label><select id="${id}" data-path="${path}" data-kind="str">${kind.map(k => `<option ${k === v ? "selected" : ""}>${k}</option>`).join("")}</select></div>`;
-        if (path.endsWith(".table")) return `<div class="field"><label for="${id}">${label}</label><input id="${id}" data-path="${path}" data-kind="list" value="${v.join(", ")}" inputmode="numeric"></div>`;
-        return `<div class="field"><label for="${id}">${label}</label><input type="number" id="${id}" data-path="${path}" data-kind="${stepv ? "float" : "int"}" step="${stepv || 1}" value="${v}" inputmode="${stepv ? "decimal" : "numeric"}"></div>`;
-      }).join("")}</div></div>`).join("");
+    $("groups").innerHTML = GROUPS.map(([title, fields, opts = {}]) => {
+      // Split the field list into runs under each subheading.
+      const runs = [{ sub: null, items: [] }];
+      for (const f of fields) {
+        if (f.sub) runs.push({ sub: f.sub, items: [] });
+        else if (!f[4] || f[4](cfg)) runs[runs.length - 1].items.push(f);
+      }
+      return `<div class="group" style="margin-bottom:12px"><h2>${title}</h2>
+        ${opts.intro ? `<p class="muted small">${opts.intro}</p>` : ""}
+        ${runs.filter(r => r.sub || r.items.length).map(r => `${r.sub ? `<h3 class="subhead">${r.sub}</h3>` : ""}
+          <div class="fields">${r.items.map(fieldHTML).join("")}</div>`).join("")}
+        ${opts.preview ? `<div id="gap-preview"></div>` : ""}</div>`;
+    }).join("");
     $("groups").querySelectorAll("[data-path]").forEach(el => el.addEventListener("change", onField));
+    renderGapPreview();
     renderObjectives();
     $("json").value = JSON.stringify(cfg, null, 2);
+  }
+
+  // Attrition and time multipliers across a range of gaps, for the current settings.
+  function renderGapPreview() {
+    const el = $("gap-preview");
+    if (!el) return;
+    const gaps = [-6, -4, -2, 0, 2, 4, 6, 8, 10];
+    const mult = (ts, g) => {
+      if (ts.kind === "none") return "×1";
+      const m = g >= 0 ? Math.pow(ts.under, g) : ts.fastest + (1 - ts.fastest) * Math.pow(ts.over, -g);
+      return "×" + m.toFixed(2).replace(/\.?0+$/, "");
+    };
+    const row = (label, cells) => `<tr><th scope="row">${label}</th>${cells.join("")}</tr>`;
+    el.innerHTML = `<h3 class="subhead">Preview</h3>
+      <div class="scroll-x"><table class="gap-table">
+        <thead><tr><th>Gap</th>${gaps.map(g => `<th>${g > 0 ? "+" + g : g}</th>`).join("")}</tr></thead>
+        <tbody>
+          ${row("Attrition", gaps.map(g => { const a = E.cost(cfg, g, 0); return `<td class="${a >= cfg.attrition ? "wall" : ""}">${a}</td>`; }))}
+          ${row("Objective time", gaps.map(g => `<td>${mult(cfg.objective_time_scaling, g)}</td>`))}
+          ${row("Camp time", gaps.map(g => `<td>${mult(cfg.camp_time_scaling, g)}</td>`))}
+        </tbody></table></div>
+      <p class="muted small">Negative gaps are overleveled. <span class="wall">Red</span> attrition is at least your pool of ${cfg.attrition}, so the encounter fails even from full.</p>`;
   }
 
   function onField(e) {
@@ -652,7 +713,7 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
       default: v = parseInt(el.value, 10);
     }
     setPath(next, el.dataset.path, v);
-    commit(next);
+    commit(next, el.dataset.kind === "str");
   }
 
   function renderObjectives() {
@@ -684,7 +745,8 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
   function withDefaults(partial) {
     const d = E.defaultConfig();
     const next = Object.assign(d, partial);
-    for (const k of ["ramp", "camp_ramp", "cost"]) next[k] = Object.assign(E.defaultConfig()[k], partial[k] || {});
+    for (const k of ["ramp", "camp_ramp", "cost", "objective_time_scaling", "camp_time_scaling"])
+      next[k] = Object.assign(E.defaultConfig()[k], partial[k] || {});
     return next;
   }
 
@@ -697,7 +759,12 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
       if (next[k].table.some(x => !Number.isInteger(x))) throw new Error(`${name} table must be whole numbers`);
       if (next[k].kind === "table" && !next[k].table.length) throw new Error(`a table ${name} needs at least one value`);
     }
-    if (!Number.isInteger(next.cost.floor) || !Number.isFinite(next.cost.scale)) throw new Error("cost floor and scale must be numbers");
+    if (!Number.isInteger(next.cost.floor) || next.cost.floor < 0) throw new Error("minimum attrition cost must be a whole number of 0 or more");
+    for (const k of ["scale", "base", "under", "over"])
+      if (!Number.isFinite(next.cost[k])) throw new Error(`attrition ${k} must be a number`);
+    for (const t of ["objective_time_scaling", "camp_time_scaling"])
+      for (const k of ["under", "over", "fastest"])
+        if (!Number.isFinite(next[t][k])) throw new Error(`${t.replace(/_/g, " ")} ${k} must be a number`);
     if (next.objectives.length > 8) throw new Error("use 8 objectives or fewer so the search stays fast");
     if (next.time > 250) throw new Error("keep the time budget at 250 or less so the search stays fast");
     for (const o of next.objectives) {
@@ -717,7 +784,7 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
     }
     $("settings-error").hidden = true;
     cfg = next; save();
-    if (rerender) renderSettings(); else $("json").value = JSON.stringify(cfg, null, 2);
+    if (rerender) renderSettings(); else { $("json").value = JSON.stringify(cfg, null, 2); renderGapPreview(); }
     renderRules();
     if (!session.history.length) newSession(); else renderPlay();
     return true;

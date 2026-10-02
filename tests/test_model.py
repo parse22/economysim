@@ -2,7 +2,7 @@ import unittest
 
 from economysim import game
 from economysim.model import (
-    CAMP, ENGAGE, NOWHERE, REST, ROTATE, Action, Config, Cost, Objective, Ramp, State,
+    CAMP, ENGAGE, NOWHERE, REST, ROTATE, Action, Config, Cost, Objective, Ramp, State, TimeScaling,
     available_objectives, camp_yield, legal_actions, start, step,
 )
 from economysim.players import ARCHETYPES, play, score, solve
@@ -24,6 +24,21 @@ class Curves(unittest.TestCase):
 
     def test_none_ramp_is_zero(self):
         self.assertEqual(Ramp(kind="none", rate=5)(3), 0)
+
+    def test_cost_curve_explodes_when_underleveled(self):
+        c = Cost(kind="curve", base=4, under=1.5, over=0.5, floor=1)
+        self.assertEqual([c(g, 0) for g in (0, 1, 2, 4)], [4, 6, 9, 20])  # 4 * 1.5^n
+
+    def test_cost_curve_diminishing_returns_when_overleveled(self):
+        c = Cost(kind="curve", base=5, under=1.5, over=0.5, floor=1)
+        self.assertEqual([c(0, g) for g in (0, 1, 2, 3, 10)], [5, 3, 2, 2, 1])  # 1 + 4 * 0.5^n
+
+    def test_time_scaling(self):
+        t = TimeScaling(kind="curve", under=1.5, over=0.5, fastest=0.5)
+        self.assertEqual(TimeScaling()(4, 10, 0), 4)            # none
+        self.assertEqual(t(4, 2, 0), 9)                          # 4 * 2.25
+        self.assertEqual([t(4, 0, g) for g in (1, 2, 20)], [3, 2, 2])  # 4 * (0.5 + 0.5 * 0.5^n)
+        self.assertEqual(t(1, 0, 20), 1)                         # never below 1
 
     def test_cost_has_floor(self):
         self.assertEqual(Cost(floor=1)(5, 10), 1)
@@ -47,6 +62,13 @@ class Encounters(unittest.TestCase):
         cfg = Config(camp_challenge=5)
         r = step(cfg, at(cfg, CAMP, done=0b11), Action(ENGAGE))
         self.assertEqual(r.cost, 5)
+
+    def test_time_scaling_applies_separately_to_camps_and_objectives(self):
+        cfg = Config(objectives=ONE + ONE, camp_time=3,
+                     objective_time_scaling=TimeScaling(kind="curve", under=2.0),
+                     camp_time_scaling=TimeScaling(kind="none"))
+        self.assertEqual(step(cfg, at(cfg, 0), Action(ENGAGE)).time, 2 * 2 ** 5)  # gap 5
+        self.assertEqual(step(cfg, at(cfg, CAMP), Action(ENGAGE)).time, 3)
 
     def test_camp_ramp_scales_with_advancement_separately(self):
         cfg = Config(camp_challenge=5, ramp=Ramp(rate=3), camp_ramp=Ramp(kind="linear", rate=1))
@@ -234,6 +256,10 @@ class ConfigLoading(unittest.TestCase):
             Config(growth="infinite")
         with self.assertRaises(ValueError):
             Config(camp_ramp=Ramp(kind="steep"))
+        with self.assertRaises(ValueError):
+            Config(cost=Cost(kind="curve", over=1.5))
+        with self.assertRaises(ValueError):
+            Config(camp_time_scaling=TimeScaling(kind="curve", fastest=0))
 
 
 class Game(unittest.TestCase):

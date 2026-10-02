@@ -24,7 +24,9 @@
     rotation_time: 2, rotation_attrition: 1,
     ramp: { kind: "linear", rate: 3, table: [] },
     camp_ramp: { kind: "none", rate: 1, table: [] },
-    cost: { kind: "linear", floor: 1, scale: 1.0 },
+    cost: { kind: "linear", floor: 1, scale: 1.0, base: 2.0, under: 1.2, over: 0.6 },
+    objective_time_scaling: { kind: "none", under: 1.1, over: 0.85, fastest: 0.5 },
+    camp_time_scaling: { kind: "none", under: 1.1, over: 0.85, fastest: 0.5 },
     delay_time: 8, delay_recover: 6, delay_growth_loss: 0,
     delay_retry: true, delay_relocate: false,
   };
@@ -42,7 +44,16 @@
     if (cfg.delay_recover < 1) throw new Error("delay_recover must be at least 1");
     for (const k of ["ramp", "camp_ramp"])
       if (!["none", "linear", "table"].includes(cfg[k].kind)) throw new Error(`${k} kind must be none, linear or table`);
-    if (cfg.cost.kind !== "linear") throw new Error("cost kind must be linear");
+    if (!["linear", "curve"].includes(cfg.cost.kind)) throw new Error("cost kind must be linear or curve");
+    const c = cfg.cost;
+    if (c.kind === "curve" && !(c.under >= 1 && c.over > 0 && c.over <= 1 && c.base >= c.floor))
+      throw new Error("cost curve needs under >= 1, 0 < over <= 1 and base >= floor");
+    for (const k of ["objective_time_scaling", "camp_time_scaling"]) {
+      const t = cfg[k];
+      if (!["none", "curve"].includes(t.kind)) throw new Error(`${k} kind must be none or curve`);
+      if (t.kind === "curve" && !(t.under >= 1 && t.over > 0 && t.over <= 1 && t.fastest > 0 && t.fastest <= 1))
+        throw new Error(`${k} needs under >= 1, 0 < over <= 1 and 0 < fastest <= 1`);
+    }
     return cfg;
   }
 
@@ -71,8 +82,29 @@
   const ramp = (cfg, k) => rampOf(cfg.ramp, k);
   const campRamp = (cfg, k) => rampOf(cfg.camp_ramp, k);
 
+  // x ** n for a whole n >= 0 by repeated multiplication, to match the Python model exactly.
+  function ipow(x, n) { let r = 1.0; for (let i = 0; i < n; i++) r *= x; return r; }
+
+  // Attrition from the gap between challenge and growth (positive = underleveled).
   function cost(cfg, challenge, growth) {
-    return Math.max(cfg.cost.floor, pyRound(cfg.cost.scale * (challenge - growth)));
+    const c = cfg.cost, gap = challenge - growth;
+    if (c.kind === "linear") return Math.max(c.floor, pyRound(c.scale * gap));
+    if (c.kind === "curve") {
+      const v = gap >= 0 ? c.base * ipow(c.under, gap) : c.floor + (c.base - c.floor) * ipow(c.over, -gap);
+      return Math.max(c.floor, pyRound(v));
+    }
+    throw new Error(`unknown cost kind ${c.kind}`);
+  }
+
+  // Encounter time from its base time and the gap.
+  function timeScale(ts, baseTime, challenge, growth) {
+    if (ts.kind === "none") return baseTime;
+    if (ts.kind === "curve") {
+      const gap = challenge - growth;
+      const m = gap >= 0 ? ipow(ts.under, gap) : ts.fastest + (1 - ts.fastest) * ipow(ts.over, -gap);
+      return Math.max(1, pyRound(baseTime * m));
+    }
+    throw new Error(`unknown time scaling kind ${ts.kind}`);
   }
 
   function start(cfg) {
@@ -117,9 +149,13 @@
 
   function actionCosts(cfg, s, a) {
     if (a.kind === ROTATE) return [cfg.rotation_time, cfg.rotation_attrition];
-    if (s.pos === CAMP) return [cfg.camp_time, cost(cfg, campChallenge(cfg, s), s.growth)];
+    if (s.pos === CAMP) {
+      const c = campChallenge(cfg, s);
+      return [timeScale(cfg.camp_time_scaling, cfg.camp_time, c, s.growth), cost(cfg, c, s.growth)];
+    }
     if (s.pos === REST) return [cfg.rest_time, 0];
-    return [cfg.objectives[s.pos].time, cost(cfg, challenge(cfg, s, s.pos), s.growth)];
+    const c = challenge(cfg, s, s.pos);
+    return [timeScale(cfg.objective_time_scaling, cfg.objectives[s.pos].time, c, s.growth), cost(cfg, c, s.growth)];
   }
 
   function describe(cfg, s, a) {
@@ -285,7 +321,7 @@
 
   const api = {
     NOWHERE, CAMP, REST, ROTATE, ENGAGE, FAILURE_MODES, SEQUENCE_MODES, GROWTH_MODES, ARCHETYPES,
-    defaultConfig, validate, withFundamentals, fundamentals, ramp, campRamp, campChallenge, cost, start, advancement, challenge,
+    defaultConfig, validate, withFundamentals, fundamentals, ramp, campRamp, campChallenge, cost, timeScale, start, advancement, challenge,
     campYield, availableObjectives, positionName, legalActions, actionCosts, describe, step,
     play, solve, countEngaged, failures,
   };

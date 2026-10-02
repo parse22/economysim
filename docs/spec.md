@@ -40,7 +40,11 @@ difficulty plus a ramp driven by Advancement.
 
 - `G` is current Growth; `k` is current Advancement.
 - `cost(C, G)` is the attrition an encounter of challenge `C` drains at
-  Growth `G`. It falls as Growth rises relative to challenge.
+  Growth `G`. It depends on the gap `C − G`: positive when underleveled,
+  negative when overleveled. It falls as Growth rises relative to challenge.
+- Camp and objective time costs (`t_camp`, `t_i`) are base times. A
+  per-encounter-type time scaling can multiply them by a factor of the same
+  gap (see Curves).
 - `ramp(k)` is the challenge added to objectives at Advancement `k`.
 - `camp_ramp(k)` is the challenge added to camps at Advancement `k`. It is
   separate from the objective ramp and is off (`none`) by default, so camps
@@ -127,18 +131,28 @@ still required to reach growth in every mode.
 | Camp        | t_camp, C_camp, yield, camp count (finite), decay (diminishing), camp_ramp |
 | Rest        | t_rest, restore, number of rest sites                         |
 | Rotation    | t_rot, a_rot                                                  |
-| Curves      | cost() and ramp(), selected and tuned per configuration       |
+| Curves      | cost(), objective and camp time scaling, ramps; selected and tuned per configuration |
 | Delay       | t_delay, A_recover, g_loss, retry, relocate                   |
 
 ## Curves
 
-`cost()` and `ramp()` are configurable rather than fixed, so their shape can
-be tuned per configuration. Each is chosen from a small set of named forms
-with numeric parameters, for example:
+`cost()`, the time scalings and the ramps are configurable rather than fixed,
+so their shape can be tuned per configuration. Each is chosen from a small set
+of named forms with numeric parameters:
 
 - `ramp(k)` and `camp_ramp(k)`: none (always 0), linear (`rate × k`), or an
   explicit per-step table.
-- `cost(C, G)`: linear difference with a floor (`max(c_min, C − G)`).
+- `cost(C, G)`, with gap `g = C − G`:
+  - linear: `max(floor, round(scale × g))`.
+  - curve (RPG-style): `base × under^g` when underleveled (`g ≥ 0`), so wide
+    gaps head towards impossible; `floor + (base − floor) × over^(−g)` when
+    overleveled, so extra growth has diminishing returns. Never below `floor`.
+- Objective time and camp time, tuned separately: none (base time), or a
+  curve multiplier of `under^g` when underleveled and
+  `fastest + (1 − fastest) × over^(−g)` when overleveled. Scaled time is
+  rounded and never below 1.
+
+Defaults keep linear attrition and unscaled time.
 
 Further forms can be added as tuning needs them.
 

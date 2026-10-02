@@ -10,6 +10,8 @@ FAILURE_MODES = ("elimination", "delay")
 SEQUENCE_MODES = ("fixed", "free")
 GROWTH_MODES = ("renewable", "finite", "diminishing")
 RAMP_KINDS = ("none", "linear", "table")
+COST_KINDS = ("linear", "curve")
+TIME_SCALING_KINDS = ("none", "curve")
 
 # Positions. Objectives are positions 0..N-1.
 NOWHERE = -1  # between locations, e.g. after clearing a camp or objective
@@ -46,18 +48,75 @@ class Ramp:
         raise ValueError(f"unknown ramp kind {self.kind!r}")
 
 
+def _ipow(x: float, n: int) -> float:
+    """x ** n for a whole n >= 0, by repeated multiplication (matches the web port exactly)."""
+    r = 1.0
+    for _ in range(n):
+        r *= x
+    return r
+
+
 @dataclass(frozen=True)
 class Cost:
-    """Attrition drained by an encounter of challenge C at Growth G."""
+    """Attrition drained by an encounter of challenge C at Growth G.
 
-    kind: str = "linear"  # "linear": max(floor, round(scale * (C - G)))
+    The gap is C - G: positive when underleveled, negative when overleveled.
+
+    linear: max(floor, round(scale * gap)).
+    curve: RPG-style. At an even match (gap 0) the cost is `base`. Each point
+        of underlevelling multiplies the cost by `under`, so wide gaps head
+        towards impossible. Each point of overlevelling keeps only `over` of
+        the remaining cost above `floor`, so overlevelling has diminishing
+        returns.
+    """
+
+    kind: str = "linear"
     floor: int = 1
     scale: float = 1.0
+    base: float = 2.0
+    under: float = 1.2
+    over: float = 0.6
 
     def __call__(self, challenge: int, growth: int) -> int:
+        gap = challenge - growth
         if self.kind == "linear":
-            return max(self.floor, round(self.scale * (challenge - growth)))
+            return max(self.floor, round(self.scale * gap))
+        if self.kind == "curve":
+            if gap >= 0:
+                value = self.base * _ipow(self.under, gap)
+            else:
+                value = self.floor + (self.base - self.floor) * _ipow(self.over, -gap)
+            return max(self.floor, round(value))
         raise ValueError(f"unknown cost kind {self.kind!r}")
+
+
+@dataclass(frozen=True)
+class TimeScaling:
+    """Multiplier on an encounter's base time from the gap C - G.
+
+    none: always the base time.
+    curve: each point of underlevelling multiplies time by `under`; each point
+        of overlevelling keeps `over` of the remaining distance to the
+        `fastest` multiplier, so overlevelling has diminishing returns.
+    Scaled time is rounded and never below 1.
+    """
+
+    kind: str = "none"
+    under: float = 1.1
+    over: float = 0.85
+    fastest: float = 0.5
+
+    def __call__(self, base_time: int, challenge: int, growth: int) -> int:
+        if self.kind == "none":
+            return base_time
+        if self.kind == "curve":
+            gap = challenge - growth
+            if gap >= 0:
+                m = _ipow(self.under, gap)
+            else:
+                m = self.fastest + (1 - self.fastest) * _ipow(self.over, -gap)
+            return max(1, round(base_time * m))
+        raise ValueError(f"unknown time scaling kind {self.kind!r}")
 
 
 DEFAULT_OBJECTIVES = (
@@ -98,6 +157,9 @@ class Config:
 
     # Curves
     ramp: Ramp = field(default_factory=Ramp)
+    # How the gap between challenge and growth sets attrition and time.
+    objective_time_scaling: TimeScaling = field(default_factory=TimeScaling)
+    camp_time_scaling: TimeScaling = field(default_factory=TimeScaling)
     # Camp challenge scaling with Advancement, separate from objectives.
     camp_ramp: Ramp = field(default_factory=lambda: Ramp(kind="none", rate=1))
     cost: Cost = field(default_factory=Cost)
@@ -127,6 +189,18 @@ class Config:
         for name in ("ramp", "camp_ramp"):
             if getattr(self, name).kind not in RAMP_KINDS:
                 raise ValueError(f"{name} kind must be one of {RAMP_KINDS}")
+        if self.cost.kind not in COST_KINDS:
+            raise ValueError(f"cost kind must be one of {COST_KINDS}")
+        if self.cost.kind == "curve":
+            c = self.cost
+            if not (c.under >= 1 and 0 < c.over <= 1 and c.base >= c.floor):
+                raise ValueError("cost curve needs under >= 1, 0 < over <= 1 and base >= floor")
+        for name in ("objective_time_scaling", "camp_time_scaling"):
+            t = getattr(self, name)
+            if t.kind not in TIME_SCALING_KINDS:
+                raise ValueError(f"{name} kind must be one of {TIME_SCALING_KINDS}")
+            if t.kind == "curve" and not (t.under >= 1 and 0 < t.over <= 1 and 0 < t.fastest <= 1):
+                raise ValueError(f"{name} needs under >= 1, 0 < over <= 1 and 0 < fastest <= 1")
 
     def fundamentals(self) -> str:
         return f"{self.failure}/{self.sequence}/{self.growth}"
@@ -154,6 +228,9 @@ class Config:
                 data[key] = Ramp(**ramp)
         if "cost" in data:
             data["cost"] = Cost(**data["cost"])
+        for key in ("objective_time_scaling", "camp_time_scaling"):
+            if key in data:
+                data[key] = TimeScaling(**data[key])
         return cls(**data)
 
     @classmethod
@@ -254,10 +331,12 @@ def action_costs(cfg: Config, s: State, a: Action) -> tuple[int, int]:
     if a.kind == ROTATE:
         return cfg.rotation_time, cfg.rotation_attrition
     if s.pos == CAMP:
-        return cfg.camp_time, cfg.cost(camp_challenge(cfg, s), s.growth)
+        c = camp_challenge(cfg, s)
+        return cfg.camp_time_scaling(cfg.camp_time, c, s.growth), cfg.cost(c, s.growth)
     if s.pos == REST:
         return cfg.rest_time, 0
-    return cfg.objectives[s.pos].time, cfg.cost(challenge(cfg, s, s.pos), s.growth)
+    c = challenge(cfg, s, s.pos)
+    return cfg.objective_time_scaling(cfg.objectives[s.pos].time, c, s.growth), cfg.cost(c, s.growth)
 
 
 def describe(cfg: Config, s: State, a: Action) -> str:
