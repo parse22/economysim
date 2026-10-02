@@ -25,8 +25,7 @@
     ramp: { kind: "linear", rate: 3, table: [] },
     camp_ramp: { kind: "none", rate: 1, table: [] },
     cost: { kind: "linear", floor: 1, scale: 1.0, base: 2.0, under: 1.2, over: 0.6 },
-    objective_time_scaling: { kind: "none", under: 1.1, over: 0.85, fastest: 0.5 },
-    camp_time_scaling: { kind: "none", under: 1.1, over: 0.85, fastest: 0.5 },
+    time_scaling: { kind: "none", under: 1.1, over: 0.85, fastest: 0.5 },
     delay_time: 8, delay_recover: 6, delay_growth_loss: 0,
     delay_retry: true, delay_relocate: false,
   };
@@ -48,12 +47,10 @@
     const c = cfg.cost;
     if (c.kind === "curve" && !(c.under >= 1 && c.over > 0 && c.over <= 1 && c.base >= c.floor))
       throw new Error("cost curve needs under >= 1, 0 < over <= 1 and base >= floor");
-    for (const k of ["objective_time_scaling", "camp_time_scaling"]) {
-      const t = cfg[k];
-      if (!["none", "curve"].includes(t.kind)) throw new Error(`${k} kind must be none or curve`);
-      if (t.kind === "curve" && !(t.under >= 1 && t.over > 0 && t.over <= 1 && t.fastest > 0 && t.fastest <= 1))
-        throw new Error(`${k} needs under >= 1, 0 < over <= 1 and 0 < fastest <= 1`);
-    }
+    const t = cfg.time_scaling;
+    if (!["none", "curve"].includes(t.kind)) throw new Error("time_scaling kind must be none or curve");
+    if (t.kind === "curve" && !(t.under >= 1 && t.over > 0 && t.over <= 1 && t.fastest > 0 && t.fastest <= 1))
+      throw new Error("time_scaling needs under >= 1, 0 < over <= 1 and 0 < fastest <= 1");
     return cfg;
   }
 
@@ -151,11 +148,11 @@
     if (a.kind === ROTATE) return [cfg.rotation_time, cfg.rotation_attrition];
     if (s.pos === CAMP) {
       const c = campChallenge(cfg, s);
-      return [timeScale(cfg.camp_time_scaling, cfg.camp_time, c, s.growth), cost(cfg, c, s.growth)];
+      return [timeScale(cfg.time_scaling, cfg.camp_time, c, s.growth), cost(cfg, c, s.growth)];
     }
     if (s.pos === REST) return [cfg.rest_time, 0];
     const c = challenge(cfg, s, s.pos);
-    return [timeScale(cfg.objective_time_scaling, cfg.objectives[s.pos].time, c, s.growth), cost(cfg, c, s.growth)];
+    return [timeScale(cfg.time_scaling, cfg.objectives[s.pos].time, c, s.growth), cost(cfg, c, s.growth)];
   }
 
   function describe(cfg, s, a) {

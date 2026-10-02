@@ -63,12 +63,11 @@ class Encounters(unittest.TestCase):
         r = step(cfg, at(cfg, CAMP, done=0b11), Action(ENGAGE))
         self.assertEqual(r.cost, 5)
 
-    def test_time_scaling_applies_separately_to_camps_and_objectives(self):
-        cfg = Config(objectives=ONE + ONE, camp_time=3,
-                     objective_time_scaling=TimeScaling(kind="curve", under=2.0),
-                     camp_time_scaling=TimeScaling(kind="none"))
-        self.assertEqual(step(cfg, at(cfg, 0), Action(ENGAGE)).time, 2 * 2 ** 5)  # gap 5
-        self.assertEqual(step(cfg, at(cfg, CAMP), Action(ENGAGE)).time, 3)
+    def test_time_scaling_applies_to_camps_and_objectives(self):
+        cfg = Config(objectives=ONE + ONE, camp_time=3, camp_challenge=2,
+                     time_scaling=TimeScaling(kind="curve", under=2.0))
+        self.assertEqual(step(cfg, at(cfg, 0), Action(ENGAGE)).time, 2 * 2 ** 5)     # gap 5
+        self.assertEqual(step(cfg, at(cfg, CAMP), Action(ENGAGE)).time, 3 * 2 ** 2)  # gap 2
 
     def test_camp_ramp_scales_with_advancement_separately(self):
         cfg = Config(camp_challenge=5, ramp=Ramp(rate=3), camp_ramp=Ramp(kind="linear", rate=1))
@@ -259,7 +258,7 @@ class ConfigLoading(unittest.TestCase):
         with self.assertRaises(ValueError):
             Config(cost=Cost(kind="curve", over=1.5))
         with self.assertRaises(ValueError):
-            Config(camp_time_scaling=TimeScaling(kind="curve", fastest=0))
+            Config(time_scaling=TimeScaling(kind="curve", fastest=0))
 
 
 class Game(unittest.TestCase):

@@ -158,8 +158,7 @@ class Config:
     # Curves
     ramp: Ramp = field(default_factory=Ramp)
     # How the gap between challenge and growth sets attrition and time.
-    objective_time_scaling: TimeScaling = field(default_factory=TimeScaling)
-    camp_time_scaling: TimeScaling = field(default_factory=TimeScaling)
+    time_scaling: TimeScaling = field(default_factory=TimeScaling)  # camps and objectives
     # Camp challenge scaling with Advancement, separate from objectives.
     camp_ramp: Ramp = field(default_factory=lambda: Ramp(kind="none", rate=1))
     cost: Cost = field(default_factory=Cost)
@@ -195,12 +194,11 @@ class Config:
             c = self.cost
             if not (c.under >= 1 and 0 < c.over <= 1 and c.base >= c.floor):
                 raise ValueError("cost curve needs under >= 1, 0 < over <= 1 and base >= floor")
-        for name in ("objective_time_scaling", "camp_time_scaling"):
-            t = getattr(self, name)
-            if t.kind not in TIME_SCALING_KINDS:
-                raise ValueError(f"{name} kind must be one of {TIME_SCALING_KINDS}")
-            if t.kind == "curve" and not (t.under >= 1 and 0 < t.over <= 1 and 0 < t.fastest <= 1):
-                raise ValueError(f"{name} needs under >= 1, 0 < over <= 1 and 0 < fastest <= 1")
+        t = self.time_scaling
+        if t.kind not in TIME_SCALING_KINDS:
+            raise ValueError(f"time_scaling kind must be one of {TIME_SCALING_KINDS}")
+        if t.kind == "curve" and not (t.under >= 1 and 0 < t.over <= 1 and 0 < t.fastest <= 1):
+            raise ValueError("time_scaling needs under >= 1, 0 < over <= 1 and 0 < fastest <= 1")
 
     def fundamentals(self) -> str:
         return f"{self.failure}/{self.sequence}/{self.growth}"
@@ -228,9 +226,8 @@ class Config:
                 data[key] = Ramp(**ramp)
         if "cost" in data:
             data["cost"] = Cost(**data["cost"])
-        for key in ("objective_time_scaling", "camp_time_scaling"):
-            if key in data:
-                data[key] = TimeScaling(**data[key])
+        if "time_scaling" in data:
+            data["time_scaling"] = TimeScaling(**data["time_scaling"])
         return cls(**data)
 
     @classmethod
@@ -332,11 +329,11 @@ def action_costs(cfg: Config, s: State, a: Action) -> tuple[int, int]:
         return cfg.rotation_time, cfg.rotation_attrition
     if s.pos == CAMP:
         c = camp_challenge(cfg, s)
-        return cfg.camp_time_scaling(cfg.camp_time, c, s.growth), cfg.cost(c, s.growth)
+        return cfg.time_scaling(cfg.camp_time, c, s.growth), cfg.cost(c, s.growth)
     if s.pos == REST:
         return cfg.rest_time, 0
     c = challenge(cfg, s, s.pos)
-    return cfg.objective_time_scaling(cfg.objectives[s.pos].time, c, s.growth), cfg.cost(c, s.growth)
+    return cfg.time_scaling(cfg.objectives[s.pos].time, c, s.growth), cfg.cost(c, s.growth)
 
 
 def describe(cfg: Config, s: State, a: Action) -> str:

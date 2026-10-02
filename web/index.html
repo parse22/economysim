@@ -633,16 +633,11 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
       ["cost.base", "Attrition at an even match (gap 0)", null, "0.1", c => c.cost.kind === "curve"],
       ["cost.under", "Underleveled: cost × per point of gap", null, "0.05", c => c.cost.kind === "curve"],
       ["cost.over", "Overleveled: share of cost above minimum kept per point", null, "0.05", c => c.cost.kind === "curve"],
-      { sub: "Objective time" },
-      ["objective_time_scaling.kind", "Shape", ["none", "curve"]],
-      ["objective_time_scaling.under", "Underleveled: time × per point of gap", null, "0.05", c => c.objective_time_scaling.kind === "curve"],
-      ["objective_time_scaling.over", "Overleveled: share of time saving left per point", null, "0.05", c => c.objective_time_scaling.kind === "curve"],
-      ["objective_time_scaling.fastest", "Fastest time multiplier", null, "0.05", c => c.objective_time_scaling.kind === "curve"],
-      { sub: "Camp time" },
-      ["camp_time_scaling.kind", "Shape", ["none", "curve"]],
-      ["camp_time_scaling.under", "Underleveled: time × per point of gap", null, "0.05", c => c.camp_time_scaling.kind === "curve"],
-      ["camp_time_scaling.over", "Overleveled: share of time saving left per point", null, "0.05", c => c.camp_time_scaling.kind === "curve"],
-      ["camp_time_scaling.fastest", "Fastest time multiplier", null, "0.05", c => c.camp_time_scaling.kind === "curve"],
+      { sub: "Time (objectives and camps)" },
+      ["time_scaling.kind", "Shape", ["none", "curve"]],
+      ["time_scaling.under", "Underleveled: time × per point of gap", null, "0.05", c => c.time_scaling.kind === "curve"],
+      ["time_scaling.over", "Overleveled: share of time saving left per point", null, "0.05", c => c.time_scaling.kind === "curve"],
+      ["time_scaling.fastest", "Fastest time multiplier", null, "0.05", c => c.time_scaling.kind === "curve"],
     ], { intro: "The gap is an encounter's challenge minus your growth. A positive gap means you are underleveled; a negative gap means overleveled. These settings turn the gap into attrition and time costs. Linear attrition subtracts growth one for one. A curve rises steeply when underleveled and gives diminishing returns when overleveled.", preview: true }],
     ["Delay (when full attrition is delay)", [["delay_time", "Time lost"], ["delay_recover", "Attrition after recovery"],
       ["delay_growth_loss", "Growth lost"], ["delay_retry", "Failed encounter can be retried", "bool"],
@@ -696,8 +691,7 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
         <thead><tr><th>Gap</th>${gaps.map(g => `<th>${g > 0 ? "+" + g : g}</th>`).join("")}</tr></thead>
         <tbody>
           ${row("Attrition", gaps.map(g => { const a = E.cost(cfg, g, 0); return `<td class="${a >= cfg.attrition ? "wall" : ""}">${a}</td>`; }))}
-          ${row("Objective time", gaps.map(g => `<td>${mult(cfg.objective_time_scaling, g)}</td>`))}
-          ${row("Camp time", gaps.map(g => `<td>${mult(cfg.camp_time_scaling, g)}</td>`))}
+          ${row("Time", gaps.map(g => `<td>${mult(cfg.time_scaling, g)}</td>`))}
         </tbody></table></div>
       <p class="muted small">Negative gaps are overleveled. <span class="wall">Red</span> attrition is at least your pool of ${cfg.attrition}, so the encounter fails even from full.</p>`;
   }
@@ -743,10 +737,12 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
   }
 
   function withDefaults(partial) {
-    const d = E.defaultConfig();
-    const next = Object.assign(d, partial);
-    for (const k of ["ramp", "camp_ramp", "cost", "objective_time_scaling", "camp_time_scaling"])
-      next[k] = Object.assign(E.defaultConfig()[k], partial[k] || {});
+    const d = E.defaultConfig(), next = {};
+    // Keep only known settings; fill anything missing from the defaults.
+    for (const k of Object.keys(d)) next[k] = k in partial ? partial[k] : d[k];
+    // Settings saved before time scaling was combined used per-encounter keys.
+    if (!("time_scaling" in partial) && partial.objective_time_scaling) next.time_scaling = partial.objective_time_scaling;
+    for (const k of ["ramp", "camp_ramp", "cost", "time_scaling"]) next[k] = Object.assign(d[k], next[k] || {});
     return next;
   }
 
@@ -762,9 +758,8 @@ textarea { font-family: var(--font-data); font-size: 0.78rem; min-height: 180px;
     if (!Number.isInteger(next.cost.floor) || next.cost.floor < 0) throw new Error("minimum attrition cost must be a whole number of 0 or more");
     for (const k of ["scale", "base", "under", "over"])
       if (!Number.isFinite(next.cost[k])) throw new Error(`attrition ${k} must be a number`);
-    for (const t of ["objective_time_scaling", "camp_time_scaling"])
-      for (const k of ["under", "over", "fastest"])
-        if (!Number.isFinite(next[t][k])) throw new Error(`${t.replace(/_/g, " ")} ${k} must be a number`);
+    for (const k of ["under", "over", "fastest"])
+      if (!Number.isFinite(next.time_scaling[k])) throw new Error(`time scaling ${k} must be a number`);
     if (next.objectives.length > 8) throw new Error("use 8 objectives or fewer so the search stays fast");
     if (next.time > 250) throw new Error("keep the time budget at 250 or less so the search stays fast");
     for (const o of next.objectives) {

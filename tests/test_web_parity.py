@@ -48,9 +48,9 @@ def configs():
         replace(base, ramp=Ramp(kind="table", table=(0, 2, 7, 9)), cost=Cost(floor=2, scale=1.5)),
         replace(base, camp_ramp=Ramp(kind="linear", rate=2), time=90),
         replace(base, camp_ramp=Ramp(kind="table", table=(0, 1, 3)), ramp=Ramp(kind="none")),
-        replace(base, cost=Cost(kind="curve"), objective_time_scaling=TimeScaling(kind="curve"), time=90),
+        replace(base, cost=Cost(kind="curve"), time_scaling=TimeScaling(kind="curve"), time=90),
         replace(base, cost=Cost(kind="curve", base=3.5, under=1.25, over=0.6, floor=1),
-                camp_time_scaling=TimeScaling(kind="curve", under=1.3, over=0.7, fastest=0.4)),
+                time_scaling=TimeScaling(kind="curve", under=1.3, over=0.7, fastest=0.4)),
     ]
     for v in variants:
         yield v.with_fundamentals("delay", "free", "finite")
